@@ -9,6 +9,7 @@
 #include <string.h>
 #include <errno.h>
 #include "sight_common_internal.h"
+#include "mrnet/mrnet_iterator.h"
 //#include "sight_layout.h"
 
 namespace sight {
@@ -118,11 +119,11 @@ class FILEStructureParser : public baseStructureParser<FILE> {
   FILEStructureParser(std::string fName, int bufSize=10000);
   FILEStructureParser(FILE* f, int bufSize=10000);
   ~FILEStructureParser();
-  
+
   protected:
   // Functions implemented by children of this class that specialize it to take input from various sources.
   
-  // readData() reads as much data as is available from the data source into buf[], upto bufSize bytes 
+  // readData() reads as much data as is available from the data source into buf[], upto bufSize bytes
   // and returns the amount of data actually read.
   size_t readData();
   
@@ -132,5 +133,30 @@ class FILEStructureParser : public baseStructureParser<FILE> {
   // Returns true if we've encountered an error in input stream
   bool streamError();
 };
+
+    class FILEStructureParser : public baseStructureParser<FILE> {
+        // Records whether this object opened the file on its own (in which case it needs to close it)
+        // or was given a ready FILE* stream
+        bool openedFile;
+
+    public:
+        FILEStructureParser(std::string fName, int bufSize=10000);
+        FILEStructureParser(FILE* f, int bufSize=10000);
+        ~FILEStructureParser();
+
+    protected:
+        // Functions implemented by children of this class that specialize it to take input from various sources.
+
+        // readData() reads as much data as is available from the data source into buf[], upto bufSize bytes
+        // and returns the amount of data actually read.
+        size_t readData();
+
+        // Returns true if we've reached the end of the input stream
+        bool streamEnd();
+
+        // Returns true if we've encountered an error in input stream
+        bool streamError();
+    };
+
 
 } // namespace sight

@@ -1895,6 +1895,21 @@ void dbgStream::init(properties* props, string title, string workDir, string img
     int outFD = fileno(out);
     buf = new dbgBuf(new fdoutbuf(outFD));
   // Version 3 (default): write output to a pipe for the default slayout to use immediately
+  }  else if(getenv("MRNET_MERGE_EXEC")) {
+      dbgFile = NULL;
+      // Unset the mutex environment variables from LoadTimeRegistry to make sure that they don't leak to the layout process
+      LoadTimeRegistry::liftMutexes();
+
+      // Execute the layout process
+      FILE *out = popen(getenv("MRNET_MERGE_EXEC"), "w");
+      if(out == NULL) { cerr << "Failed to run command \""<<getenv("MRNET_MERGE_EXEC")<<"\"!"<<endl; assert(0); }
+
+      // Restore the LoadTimeRegistry mutexes
+      LoadTimeRegistry::restoreMutexes();
+
+      int outFD = fileno(out);
+      buf = new dbgBuf(new fdoutbuf(outFD));
+      // Version 3 (default): write output to a pipe for the default slayout to use immediately
   } else {
     dbgFile = NULL;
     // Unset the mutex environment variables from LoadTimeRegistry to make sure that they don't leak to the layout process

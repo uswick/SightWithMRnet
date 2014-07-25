@@ -415,3 +415,7 @@ bool FILEStructureParser::streamError() {
 }
 
 } // namespace sight
+
+/*******************************
+ ***** MRNEtStructureParser *****
+ *******************************/
