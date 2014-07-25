@@ -51,7 +51,6 @@ int main(int argc, char** argv) {
 
   
   FILEStructureParser parser(f, 10000);
-  
   layoutStructure(parser);
 
   if(argc==2)
