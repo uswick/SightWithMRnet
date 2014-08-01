@@ -16,6 +16,11 @@
 #include "tools/callpath/include/Callpath.h"
 #include "tools/callpath/include/CallpathRuntime.h"
 
+#include "mrnet/mrnet_integration.h"
+#include "mrnet/AtomicSyncPrimitives.h"
+using namespace MRN;
+using namespace atomiccontrols;
+
 namespace sight {
 namespace structure{
 
@@ -54,6 +59,9 @@ void SightInit_internal(properties* props);
 // Creates a new dbgStream based on the given properties of a "sight" tag and returns a pointer to it.
 // storeProps: if true, the given properties object is emitted into this dbgStream's output file
 structure::dbgStream* createDbgStream(properties* props, bool storeProps);
+structure::MRNetostream* createMRnetStream(properties* props, bool storeProps,  Stream* strm, Network* net, int strm_id,
+        int tag_id);
+
 
 // Empty implementation of Sight initialization, to be used when Sight is disabled via #define DISABLE_SIGHT
 void NullSightInit(std::string title, std::string workDir);
@@ -1247,6 +1255,52 @@ public:
   std::string tagStr(const properties& props);
 }; // dbgStream
 
+/**
+* DBG Stream for MRNet wire transfer
+*/
+class MRNetostream : public dbgStream {
+    private:
+        Stream *strm;
+        int strm_id;
+        int tag_id;
+        Network *net;
+        vector<char> buffer ;
+
+    public:
+        //for eostream checks
+        static std::map<Rank, int*> stream_end_flags;
+        static atomic_mutex_t* flagsMutex;
+        static AtomicSync* synchronizer ;
+
+    public:
+        MRNetostream(std::streambuf *sb)
+        : std::ostream(sb) {
+        }
+
+        MRNetostream(Stream* strm, Network* net, int strm_id, int tag_id,
+                properties* props, std::string title, std::string workDir, std::string imgDir, std::string tmpDir)
+        : dbgStream(props, title, workDir, imgDir, tmpDir) {
+            this->strm = strm ;
+            this->net = net ;
+            this->strm_id = strm_id;
+            this->tag_id = tag_id;
+        }
+
+        bool transferData(char* buf, int length);
+
+        // Template based operator
+        template <typename T>
+        friend MRNetostream &operator <<(MRNetostream &, const T &);
+
+        // Additional overload to handle ostream specific io manipulators
+        friend MRNetostream &operator <<(MRNetostream &, std::ostream &(*)(std::ostream &));
+
+        // Accessor function to get a reference to the ostream
+        std::ostream &get_ostream() {
+            return *this;
+        }
+    };
+
 extern dbgStream dbg;
 
 class dbgStreamMerger : public Merger {
@@ -1372,6 +1426,7 @@ class IndentMerger : public Merger {
 
 
 int dbgprintf(const char * format, ... );
+
 
 } // namespace structure
 } // namespace sight

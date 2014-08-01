@@ -20,6 +20,8 @@
 #include "fdstream.h"
 #include "process.h"
 #include "process.C"
+#import "integral_wrapper.hpp"
+
 using namespace std;
 using namespace sight::common;
 
@@ -230,6 +232,26 @@ structure::dbgStream* createDbgStream(properties* props, bool storeProps) {
   string tmpDir = createDir(properties::get(sightIt, "workDir"), "html/tmp");
   
   return new dbgStream(storeProps? props: NULL, properties::get(sightIt, "title"), properties::get(sightIt, "workDir"), imgDir, tmpDir);
+}
+
+// Creates a new dbgStream based on the given properties of a "sight" tag and returns a pointer to it.
+// storeProps: if true, the given properties object is emitted into this dbgStream's output file
+structure::MRNetostream* createMRnetStream(properties* props, bool storeProps,  Stream* strm, Network* net, int strm_id,
+            int tag_id) {
+  properties::iterator sightIt = props->find("sight");
+  assert(!sightIt.isEnd());
+
+  // Create the directory structure for the structural information
+  // Main output directory
+  createDir(properties::get(sightIt, "workDir"), "");
+
+  // Directory where client-generated images will go
+  string imgDir = createDir(properties::get(sightIt, "workDir"), "html/dbg_imgs");
+
+  // Directory that widgets can use as temporary scratch space
+  string tmpDir = createDir(properties::get(sightIt, "workDir"), "html/tmp");
+
+  return new MRNetostream(strm, net, strm_id, tag_id, storeProps? props: NULL, properties::get(sightIt, "title"), properties::get(sightIt, "workDir"), imgDir, tmpDir);
 }
 
 // Empty implementation of Sight initialization, to be used when Sight is disabled via #define DISABLE_SIGHT
@@ -1910,7 +1932,7 @@ void dbgStream::init(properties* props, string title, string workDir, string img
       int outFD = fileno(out);
       buf = new dbgBuf(new fdoutbuf(outFD));
       // Version 3 (default): write output to a pipe for the default slayout to use immediately
-  } else {
+  } else if(buf == NULL) {
     dbgFile = NULL;
     // Unset the mutex environment variables from LoadTimeRegistry to make sure that they don't leak to the layout process
     LoadTimeRegistry::liftMutexes();
@@ -2129,6 +2151,83 @@ std::string dbgStream::tagStr(const properties& props) {
   return enterStr(props) + exitStr(props);
 }
 
+
+/*************************
+ ***** MRNet Stream *****
+ ************************/
+
+template <typename T>
+inline MRNetostream &
+operator <<(MRNetostream &out, const T &value) {
+            static_cast<std::ostream &>(out) << value;
+            return out;
+}
+
+//  overload for string types
+inline MRNetostream &
+operator <<(MRNetostream &out, const char *s) {
+            int length = 0;
+            while (s[length] != '\0'){
+                length++;
+            };
+            //todo currently we push all data out
+            //buffer if possible
+            out.transferData(s, length);
+            return out;
+}
+
+
+template <>
+inline MRNetostream &
+operator<<(MRNetostream & out, const std::string& value){
+            out.transferData(value.c_str(), (int) value.size());
+            return out ;
+ }
+
+//  overload for std::ostream specific io manipulators
+inline MRNetostream &
+operator <<(MRNetostream &out, std::ostream &(*func)(std::ostream &)) {
+//            static_cast<std::ostream &>(out) << func;
+            return out;
+}
+
+bool MRNetostream::transferData(char* buf, int length){
+    if(length > 0){
+        //check if we should set outgoing packet as the last/final packet of this stream
+        std::map<Rank, int*>::iterator it = stream_end_flags.begin();
+        bool set_final = true ;
+        for(; it != stream_end_flags.end() ; it++){
+            synchronizer->set_mutex_lock(flagsMutex);
+            int* flag = it->second;
+            if(*flag == 1){
+                set_final = set_final && true;
+            }else {
+                set_final = false;
+                break;
+            }
+            synchronizer->set_mutex_unlock(flagsMutex);
+        }
+
+        Packet * pckt;
+        if(!set_final){
+                pckt = new Packet(strm_id, tag_id, "%ac", buf, length);
+        }else {
+                pckt = new Packet(strm_id, PROT_END_PHASE, "%ac", buf, length);
+        }
+        PacketPtr new_packet (pckt);
+        if(net->is_LocalNodeFrontEnd()){
+//            FE Processing
+            printf("#MRNet Merger method FE net : %p pid : %d  \n", net, getpid());
+            strm->add_IncomingPacket(new_packet);
+        }   else{
+//            INternal or BE node processing
+            printf("#MRNet Merger method Internal/BE net : %p  pid : %d \n", net, getpid());
+            net->send_PacketToParent(new_packet);
+        }
+        return true;
+    }
+    return false;
+}  ;
 
 /***************************
  ***** dbgStreamMerger *****

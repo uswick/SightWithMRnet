@@ -11,6 +11,10 @@
 #include "sight_common_internal.h"
 #include "mrnet/mrnet_iterator.h"
 //#include "sight_layout.h"
+#include "AtomicSyncPrimitives.h"
+#include "mrnet_integration.h"
+
+using  namespace atomiccontrols;
 
 namespace sight {
 
@@ -134,15 +138,34 @@ class FILEStructureParser : public baseStructureParser<FILE> {
   bool streamError();
 };
 
-    class FILEStructureParser : public baseStructureParser<FILE> {
-        // Records whether this object opened the file on its own (in which case it needs to close it)
-        // or was given a ready FILE* stream
-        bool openedFile;
+
+    class MRNetParser : public baseStructureParser<FILE> {
+        std::vector<char> *inputQueue;
+        atomic_cond_t *inQueueSignal;
+
+        AtomicSync *synchronizer;
+        //this is needed to synchronize reads from inputQueue
+        atomic_mutex_t *inQueueMutex;
+
+        int* stream_end ;
+        int* stream_error ;
+        atomic_mutex_t *s_flags_mutex;
+    public:
+        int total_ints;
 
     public:
-        FILEStructureParser(std::string fName, int bufSize=10000);
-        FILEStructureParser(FILE* f, int bufSize=10000);
-        ~FILEStructureParser();
+        MRNetParser(std::vector<char>& input, atomic_cond_t* cond, atomic_mutex_t* inQueueMutex, AtomicSync* s,
+                int* s_end, atomic_mutex_t* s_mutex)
+        :total_ints(0), baseStructureParser<FILE>(TOTAL_PACKET_SIZE){
+            inputQueue = &input;
+            inQueueSignal = cond ;
+            this->inQueueMutex = inQueueMutex;
+            this->synchronizer = s;
+            this->stream_end = s_end ;
+            this->s_flags_mutex = s_mutex;
+        }
+
+        ~MRNetParser();
 
     protected:
         // Functions implemented by children of this class that specialize it to take input from various sources.
@@ -156,6 +179,7 @@ class FILEStructureParser : public baseStructureParser<FILE> {
 
         // Returns true if we've encountered an error in input stream
         bool streamError();
+
     };
 
 

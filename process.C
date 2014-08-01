@@ -414,8 +414,67 @@ bool FILEStructureParser::streamError() {
   return ferror(stream);
 }
 
-} // namespace sight
-
 /*******************************
  ***** MRNEtStructureParser *****
  *******************************/
+
+    size_t MRNetParser::readData() {
+        std::vector<char> temp;
+        int num = 0;
+        //wait for next 'TOTAL_PACKET_SIZE' number of integers from inputqueue
+        //remove from shared queue  and return
+        while (num < TOTAL_PACKET_SIZE && !end()) {
+            //wait for signal from producer
+#ifdef DEBUG_ON
+        fprintf(stdout, "[MRNetQueueIterator #next().. PID : %d num : %d condition :  %p mutex : %p ]\n"
+                , getpid(),num , inQueueSignal, inQueueMutex)  ;
+#endif
+            //todo handle this properly
+            synchronizer->set_mutex_lock(inQueueMutex);
+            synchronizer->set_cond_wait(inQueueSignal, inQueueMutex);
+
+            //get iterator for incoming queue
+            std::vector<char>::iterator it = inputQueue->begin();
+            std::vector<char>::iterator del;
+
+            for (; it != inputQueue->end(), num < TOTAL_PACKET_SIZE ;) {
+                temp.push_back(*it);
+                //remove integer from queue
+                del = it;
+                it = inputQueue->erase(del);
+                num++;
+            }
+#ifdef DEBUG_ON
+        printf("[MRNetQueueIterator read from incoming queue.. PID : %d [TEMP values ]  --> ", getpid());
+        for(std::vector<char>::iterator itr = temp.begin() ; itr != temp.end() ; itr++){
+            printf(" : [[ %d ]] " ,*itr);
+        }
+        printf("[   [END TEMP values ] \n ");
+#endif
+            synchronizer->set_mutex_unlock(inQueueMutex);
+        }
+
+        //update total integers recieved
+        total_ints += num;
+        return (size_t) num ;
+    }
+
+// Returns true if we've reached the end of the input stream
+    bool MRNetParser::streamEnd() {
+        int end_flag;
+        synchronizer->set_mutex_lock(s_flags_mutex);
+            end_flag = *stream_end;
+        synchronizer->set_mutex_unlock(s_flags_mutex);
+
+        return end_flag == 1;
+    }
+
+// Returns true if we've encountered an error in input stream
+    bool MRNetParser::streamError() {
+        return false;
+    }
+
+
+
+} // namespace sight
+
