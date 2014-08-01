@@ -1,0 +1,127 @@
+#include "mrnet/MRNet.h"
+#include "mrnet_integration.h"
+#include "../process.h"
+
+using namespace MRN;
+using namespace sight;
+/**
+* acts as the BE emitter
+* if MRNET_MERGE_EXEC is defined  (at #sightInit()) then execute this process
+*/
+int main(int argc, char **argv)
+{
+    // Command line args are: parent_hostname, parent_port, parent_rank, my_hostname, my_rank
+    // these are used to instantiate the backend network object
+
+    if( argc != 6 ) {
+        fprintf(stderr, "Incorrect usage, must pass parent/local info\n");
+        return -1;
+    }
+
+    const char* parHostname = argv[argc-5];
+    Port parPort = (Port)strtoul( argv[argc-4], NULL, 10 );
+    const char* myHostname = argv[argc-2];
+    Rank myRank = (Rank)strtoul( argv[argc-1], NULL, 10 );
+    Rank parRank = (Rank)strtoul( argv[argc-3], NULL, 10 );
+
+    fprintf( stdout, "Backend host:rank %s:%d connecting to parent host:port:rank %s:%d:%d\n",
+            myHostname, myRank, parHostname, parPort, parRank);
+
+    Stream * stream = NULL;
+    PacketPtr p;
+    int rc, tag=0, num_iters=0;
+    int send_val = 10 ;
+    int recv_val ;
+
+    char sendAr[TOTAL_PACKET_SIZE];
+
+    Network * net = Network::CreateNetworkBE( argc, argv );
+
+    do {
+        //configure for piped input from emitter
+        FILE* f = stdin;
+        //wait until inidacated by FE
+        rc = net->recv(&tag, p, &stream);
+        if( rc == -1 ) {
+            fprintf( stderr, "BE: Network::recv() failure\n" );
+            break;
+        }
+        else if( rc == 0 ) {
+            // a stream was closed
+            continue;
+        }
+         
+        switch(tag) {
+
+        case PROT_CONCAT:
+            p->unpack( "%d %d", &recv_val, &num_iters );
+
+            printf("Init BE pid : %d : values :", getpid());
+                // Send integer arrays as waves - simulate buffer waves
+                for (int i = 0; i < num_iters; i++) {
+                    if (!feof(f)) {
+                        size_t bytes_read = populateBuffer(sendAr, f);
+
+                        fprintf(stdout, "BE: Sending wave %u ...\n", i);
+                        if (stream->send(tag, "%ac", sendAr, bytes_read) == -1) {
+                            fprintf(stderr, "BE: stream::send(%%d) failure in PROT_CONCAT\n");
+                            tag = PROT_EXIT;
+                            break;
+                        }
+                        if (stream->flush() == -1) {
+                            fprintf(stderr, "BE: stream::flush() failure in PROT_CONCAT\n");
+                            break;
+                        }
+                        fflush(stdout);
+                        sleep(2); // stagger sends
+                    } else{
+                        //End of stream go to exit stage
+                        //todo handle this properly - introduce new state ? ie:- PROT_EOF_STREAM
+                        if (stream->send(PROT_END_PHASE, "%c", 'e', 1) == -1) {
+                            fprintf(stderr, "BE: stream::send(%%d) failure in PROT_CONCAT\n");
+                            tag = PROT_EXIT;
+                            break;
+                        }
+                    }
+                }
+                break;
+
+        case PROT_EXIT:
+            if( stream->send(tag, "%d", 0) == -1 ) {
+                fprintf( stderr, "BE: stream::send(%%s) failure in PROT_EXIT\n" );
+                break;
+            }
+            if( stream->flush( ) == -1 ) {
+                fprintf( stderr, "BE: stream::flush() failure in PROT_EXIT\n" );
+            }
+            break;
+
+        default:
+            fprintf( stderr, "BE: Unknown Protocol: %d\n", tag );
+            tag = PROT_EXIT;
+            break;
+        }
+
+        fflush(stderr);
+
+    } while( tag != PROT_EXIT );
+
+    if( stream != NULL ) {
+        while( ! stream->is_Closed() )
+            sleep(1);
+
+        delete stream;
+    }
+
+    // FE delete of the net will cause us to exit, wait for it
+    net->waitfor_ShutDown();
+    delete net;
+
+    return 0;
+}
+
+size_t populateBuffer(char *sendAr, FILE* f ) {
+    return fread(sendAr, 1, TOTAL_PACKET_SIZE, f);
+}
+
+
