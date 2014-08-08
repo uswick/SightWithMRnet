@@ -42,6 +42,7 @@ extern int outputStreamID;
 extern bool initializedDebug;
 
 class dbgStream;
+class MRNetostream;
 
 // Provides the output directory and run title as well as the arguments that are required to rerun the application
 void SightInit(int argc, char** argv, std::string title="Debug Output", std::string workDir="dbg");
@@ -367,7 +368,7 @@ class sightObj {
   // The stack of sightObjs that are currently in scope
   //static std::list<sightObj*> soStack;
     
-  // The dbgStream on which this sightObj was written. It is possible to concurrently 
+  // The dbgStream on which this sightObj was written. It is possible to concurrently
   // maintain multiple such streams and we need to be sure that we emit exit tags
   // on the same streams as their corresponding entry tags.
   dbgStream* outStream;
@@ -1182,6 +1183,7 @@ public:
   // ostreams.
   dbgStream();
   dbgStream(properties* props, std::string title, std::string workDir, std::string imgDir, std::string tmpDir);
+  dbgStream(properties* props, std::string title, std::string workDir, std::string imgDir, std::string tmpDir, bool no_init);
   void init(properties* props, std::string title, std::string workDir, std::string imgDir, std::string tmpDir);
   ~dbgStream();
 
@@ -1227,9 +1229,9 @@ public:
   // ----- Output of tags ----
   // Emit the entry into a tag to the structured output file. The tag is set to the given property key/value pairs
   //void enter(std::string name, const std::map<std::string, std::string>& properties, bool inheritedFrom);
-  void enter(sightObj* obj);
+  virtual void enter(sightObj* obj);
     
-  void enter(const properties& props);
+  virtual void enter(const properties& props);
     
   // Returns the text that should be emitted to the structured output file that denotes the the entry into a tag. 
   // The tag is set to the given property key/value pairs
@@ -1238,8 +1240,8 @@ public:
     
   // Emit the exit from a given tag to the structured output file
   //void exit(std::string name);
-  void exit(sightObj* obj);
-  void exit(const properties& props);
+  virtual void exit(sightObj* obj);
+  virtual void exit(const properties& props);
     
   // Returns the text that should be emitted to the the structured output file to that denotes exit from a given tag
   //std::string exitStr(std::string name);
@@ -1253,6 +1255,18 @@ public:
   // Returns the text that should be emitted to the the structured output file to that denotes a full tag an an the structured output file
   //std::string tagStr(std::string name, const std::map<std::string, std::string>& properties, bool inheritedFrom);
   std::string tagStr(const properties& props);
+
+  bool getEmitExitTag(){
+      return emitExitTag;
+  }
+
+  void setEmitExitTag(bool flag){
+      emitExitTag = flag;
+  }
+
+  sightObj* getSightObject(){
+      return (sightObj*) this;
+  }
 }; // dbgStream
 
 /**
@@ -1260,40 +1274,66 @@ public:
 */
 class MRNetostream : public dbgStream {
     private:
-        Stream *strm;
+        MRN::Stream *strm;
         int strm_id;
         int tag_id;
-        Network *net;
-        vector<char> buffer ;
+        MRN::Network *net;
+        std::vector<char> buffer_queue ;
+        bool final_packet;
+        char* buffer ;
+        bool init;
+        int wave ;
 
     public:
-        //for eostream checks
-        static std::map<Rank, int*> stream_end_flags;
-        static atomic_mutex_t* flagsMutex;
-        static AtomicSync* synchronizer ;
-
-    public:
-        MRNetostream(std::streambuf *sb)
-        : std::ostream(sb) {
-        }
-
-        MRNetostream(Stream* strm, Network* net, int strm_id, int tag_id,
+        MRNetostream(MRN::Stream* strm, MRN::Network* net, int strm_id, int tag_id,
                 properties* props, std::string title, std::string workDir, std::string imgDir, std::string tmpDir)
-        : dbgStream(props, title, workDir, imgDir, tmpDir) {
+        : dbgStream() {
             this->strm = strm ;
             this->net = net ;
             this->strm_id = strm_id;
             this->tag_id = tag_id;
+            buffer = (char*)malloc(TOTAL_PACKET_SIZE);
+            setEofStream(false);
+            wave = 0 ;
+            dbgStream::init(props, title, workDir, imgDir, tmpDir);
+            init = true;
         }
 
-        bool transferData(char* buf, int length);
+        ~MRNetostream();
 
-        // Template based operator
+        void setEofStream(bool flag){
+            final_packet = flag;
+        }
+
+        bool eofStream(){
+            return final_packet;
+        }
+
+        bool transferData(const char* buf, int length, bool set_final);
+
+        size_t readQueue();
+
+        void writeQueue(const char *data_ar, int length) {
+            //insert to queue
+            for (int i = 0; i < length; i++) {
+                buffer_queue.push_back(data_ar[i]);
+            }
+        }
+
+    // Template based operator
         template <typename T>
         friend MRNetostream &operator <<(MRNetostream &, const T &);
 
         // Additional overload to handle ostream specific io manipulators
         friend MRNetostream &operator <<(MRNetostream &, std::ostream &(*)(std::ostream &));
+
+        void enter(sightObj* obj);
+
+        void enter(const properties& props);
+
+        void exit(sightObj* obj);
+
+        void exit(const properties& props);
 
         // Accessor function to get a reference to the ostream
         std::ostream &get_ostream() {

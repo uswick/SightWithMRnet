@@ -20,19 +20,17 @@ void MRNetThread::init(std::set<Rank> ranks) {
         //create iterators
         //for each rank create iterator and relevant signal handlers
 #ifdef DEBUG_ON
-        fprintf(stdout, "[MRNetThread Initialization started.. PID : %d rank %d ]\n", getpid(), r);
+        fprintf(stdout, "[MRNetThread Initialization started.. PID : %d ]\n", getpid());
 #endif
         //input/out sync handling
         inQueueMutex = new atomic_mutex_t;
         *inQueueMutex = ATOMIC_SYNC_MUTEX_INITIALIZER;
 
-
-        flagsMutex = new atomic_mutex_t;
         int i = 0;
 
         for (std::set<Rank>::iterator ranks_it = ranks.begin(); ranks_it != ranks.end(); ranks_it++, i++) {
             Rank r = *ranks_it;
-            std::vector<char> *inputQueue = new std::vector<char>;
+            std::vector<DataPckt> *inputQueue = new std::vector<DataPckt>;
             atomic_cond_t *signal = new atomic_cond_t;
             *signal = ATOMIC_SYNC_COND_INITIALIZER ;
             int* fSignal = new int;
@@ -40,20 +38,14 @@ void MRNetThread::init(std::set<Rank> ranks) {
 
             inputSignals[r] = signal;
             bufferData[r] = inputQueue;
-            stream_end_flags[r] =  fSignal;
             //each iterator owns a input queue
-            MRNetParser *it = new MRNetParser(*bufferData[r], inputSignals[r], inQueueMutex, synchronizer,
-                    stream_end_flags[r], flagsMutex);
-            iterators.push_back(*it);
+            MRNetParser *it = new MRNetParser(*bufferData[r], inputSignals[r], inQueueMutex, synchronizer);
+            iterators.push_back(it);
         }
 
         //create a Merger and merge()
         //todo init merge obj properly
 
-        //before creating merger setup sync/flag data
-        MRNetostream::synchronizer = synchronizer;
-        MRNetostream::flagsMutex = flagsMutex;
-        MRNetostream::stream_end_flags = stream_end_flags;
 
         //create therads
         thread1 = new pthread_t;
@@ -62,7 +54,7 @@ void MRNetThread::init(std::set<Rank> ranks) {
         //exit thread now
         initialized = true;
 #ifdef DEBUG_ON
-        fprintf(stdout, "[MRNetThread Initialization completed!!.. PID : %d rank %d ]\n", getpid(), r);
+        fprintf(stdout, "[MRNetThread Initialization completed!!.. PID : %d rank ]\n", getpid());
 #endif
     }
 }
@@ -73,12 +65,12 @@ void *MRNetThread::consumerFuncHelper(void *arg) {
 }
 
 void MRNetThread::consumerFunc() {
-#ifdef DEBUG_ON
+//#ifdef DEBUG_ON
     fprintf(stdout, "[MRNetThread Merge thread Started.. PID : %d number of iterators : %d ]\n", getpid(), iterators.size());
-#endif
+//#endif
     //do merging in this seperate thread
     const char* outDir = "test_out/tmp";
-    mergeType mt = str2MergeType(string("common"));
+    mergeType mt = str2MergeType(string("zipper"));
 
 
 #ifdef VERBOSE
@@ -132,17 +124,18 @@ void MRNetThread::consumerFunc() {
 #endif
             "");
 
+    fprintf(stdout, "[MRNetThread Merge NEAR ENDD !!.. PID : %d number of iterators : %d ]\n", getpid(), iterators.size());
     // Close all the parsers and their files
-    for(vector<MRNetParser*>::iterator p=iterators.begin(); p!=iterators.end(); p++)
-        delete *p;
+//    for(vector<MRNetParser*>::iterator p=iterators.begin(); p!=iterators.end(); p++)
+//        delete *p;
+
+    fprintf(stdout, "[MRNetThread Merge thread ENDD !!.. PID : %d number of iterators ]\n", getpid());
+
 }
 
 void MRNetThread::destroy() {
     delete thread1;
     delete inQueueMutex;
-    delete[] stream_end_flags;
-    delete[] stream_end_flags;
-    delete flagsMutex;
     //todo remove all heap buffers and signals ,etc safely
 }
 

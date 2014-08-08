@@ -4,19 +4,17 @@ EXE := .exe
 endif
 
 sight_H := ../*.h ../*/*.h ../widgets/*/*.h
-TESTERS = 8.Modules${EXE} 9.CompModules.merged${EXE} 9.CompModules.single${EXE} 5.Tracing${EXE} 0.Demo${EXE} 11.ExternTraceProcess${EXE} 10.SpringModules${EXE} \
-          1.StructuredFormatting${EXE} 2.ConditionalFormatting${EXE} 3.Navigation${EXE} \
-          4.AttributeAnnotationFiltering${EXE} 6.PerfAnalysis${EXE} \
-          7.Merging${EXE} 
+TESTERS = 4.AttributeAnnotationFiltering${EXE} 
 
 all: ${TESTERS}
 
 run: ${TESTERS}
-	# 0.Demo
-	export SIGHT_FILE_OUT=1; ./0.Demo${EXE} 5; ./0.Demo${EXE} 6; ./0.Demo${EXE} 7
-	export SIGHT_FILE_OUT=1; rm -rf dbg.0.Demo; ../hier_merge dbg.0.Demo common dbg.0.Demo.maxDepth_5/structure dbg.0.Demo.maxDepth_6/structure dbg.0.Demo.maxDepth_7/structure
-	#rm -rf dbg.0.Demo.*;
-	../slayout${EXE} dbg.0.Demo/structure;
+	# 4.AttributeAnnotationFiltering        
+	./4.AttributeAnnotationFiltering${EXE}; 
+	export SIGHT_FILE_OUT=1; ./4.AttributeAnnotationFiltering${EXE} 0 20; ./4.AttributeAnnotationFiltering${EXE} 1 20; ./4.AttributeAnnotationFiltering${EXE} 2 20; ./4.AttributeAnnotationFiltering${EXE} 3 20
+	export SIGHT_FILE_OUT=1; rm -rf dbg.4.AttributeAnnotationFiltering; ../hier_merge dbg.4.AttributeAnnotationFiltering zipper dbg.4.AttributeAnnotationFiltering.client_0.numIters_20/structure dbg.4.AttributeAnnotationFiltering.client_1.numIters_20/structure dbg.4.AttributeAnnotationFiltering.client_2.numIters_20/structure dbg.4.AttributeAnnotationFiltering.client_3.numIters_20/structure
+	rm -rf dbg.4.AttributeAnnotationFiltering.*;
+	../slayout${EXE} dbg.4.AttributeAnnotationFiltering/structure;
 
 0.Demo${EXE}: 0.Demo.C ../libsight_structure.so ${sight_H}
 	${CCC} ${SIGHT_CFLAGS} -DROOT_PATH="\"${ROOT_PATH}\"" 0.Demo.C -I.. -I../widgets -L.. -lsight_structure ${SIGHT_LINKFLAGS} -o 0.Demo${EXE}
@@ -59,4 +57,4 @@ run: ${TESTERS}
 	${CCC} -g ${SIGHT_CFLAGS} 11.ExternTraceProcess.C -I.. -I../widgets -L.. -lsight_structure ${SIGHT_LINKFLAGS} -o 11.ExternTraceProcess${EXE}
 
 clean:
-	rm -rf ${TESTERS} dbg.* *.core
+	rm -rf ${TESTERS} dbg.*

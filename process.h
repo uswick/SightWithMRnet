@@ -9,7 +9,6 @@
 #include <string.h>
 #include <errno.h>
 #include "sight_common_internal.h"
-#include "mrnet/mrnet_iterator.h"
 //#include "sight_layout.h"
 #include "AtomicSyncPrimitives.h"
 #include "mrnet_integration.h"
@@ -139,30 +138,31 @@ class FILEStructureParser : public baseStructureParser<FILE> {
 };
 
 
-    class MRNetParser : public baseStructureParser<FILE> {
-        std::vector<char> *inputQueue;
+class MRNetParser : public baseStructureParser<FILE> {
+    private:
+        std::vector<DataPckt> *inputQueue;
         atomic_cond_t *inQueueSignal;
 
         AtomicSync *synchronizer;
         //this is needed to synchronize reads from inputQueue
         atomic_mutex_t *inQueueMutex;
 
-        int* stream_end ;
-        int* stream_error ;
-        atomic_mutex_t *s_flags_mutex;
+        bool stream_end ;
+        bool stream_error ;
     public:
         int total_ints;
+        int wave;
 
     public:
-        MRNetParser(std::vector<char>& input, atomic_cond_t* cond, atomic_mutex_t* inQueueMutex, AtomicSync* s,
-                int* s_end, atomic_mutex_t* s_mutex)
+        MRNetParser(std::vector<DataPckt>& input, atomic_cond_t* cond, atomic_mutex_t* inQueueMutex, AtomicSync* s)
         :total_ints(0), baseStructureParser<FILE>(TOTAL_PACKET_SIZE){
             inputQueue = &input;
             inQueueSignal = cond ;
             this->inQueueMutex = inQueueMutex;
             this->synchronizer = s;
-            this->stream_end = s_end ;
-            this->s_flags_mutex = s_mutex;
+            this->stream_end = false;
+            this->stream_error = false;
+            wave = 0;
         }
 
         ~MRNetParser();

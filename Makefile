@@ -4,6 +4,10 @@ SIGHT_STRUCTURE_O := sight_structure.o attributes/attributes_structure.o
 SIGHT_STRUCTURE_H := sight.h sight_structure_internal.h attributes/attributes_structure.h
 SIGHT_LAYOUT_O := sight_layout.o attributes/attributes_layout.o slayout.o variant_layout.o 
 SIGHT_LAYOUT_H := sight.h sight_layout_internal.h attributes/attributes_layout.h variant_layout.h
+SIGHT_MRNET_FE := mrnet/mrnet_front.C
+SIGHT_MRNET_SO := mrnet/mrnet_merge.C mrnet/mrnet_producer.C mrnet/mrnet_tr_callback.C mrnet/mrnet_threads.C
+SIGHT_MRNET_BE := mrnet/mrnet_emmitter.C
+SIGHT_MRNET_H := mrnet/AtomicSyncPrimitives.h mrnet/mrnet_integration.h mrnet/mrnet_iterator.h
 sight := ${sight_O} ${sight_H} gdbLineNum.pl sightDefines.pl
 
 ROOT_PATH = ${CURDIR}
@@ -11,8 +15,12 @@ ROOT_PATH = ${CURDIR}
 SIGHT_CFLAGS = -g -fPIC -I${ROOT_PATH} -I${ROOT_PATH}/attributes -I${ROOT_PATH}/widgets/* \
                 -I${ROOT_PATH}/tools/callpath/src -I${ROOT_PATH}/tools/adept-utils/include \
                 -I${ROOT_PATH}/tools/boost_1_55_0 \
-                -I${ROOT_PATH}/widgets/papi/include \
-                -I${ROOT_PATH}/widgets/libmsr/include
+                -I${ROOT_PATH}/widgets/libmsr/include \
+		-I/home/usw/Install/MRnet/mrnet_4.1.0/include \
+		-I/home/usw/Install/MRnet/mrnet_4.1.0/xplat/include \
+		-I/home/usw/Install/MRnet/mrnet_4.1.0/build/x86_64-unknown-linux-gnu \
+		-I/home/usw/Install/MRnet/mrnet_4.1.0/external/boost/include \
+                -I${ROOT_PATH}/mrnet
 
 SIGHT_LINKFLAGS = \
                   -Wl,-rpath ${ROOT_PATH} \
@@ -22,18 +30,30 @@ SIGHT_LINKFLAGS = \
                   -Wl,-rpath ${ROOT_PATH}/tools/adept-utils/lib \
                   ${ROOT_PATH}/tools/callpath/src/src/libcallpath.so \
                   -Wl,-rpath ${ROOT_PATH}/tools/callpath/src/src \
-                  ${ROOT_PATH}/widgets/papi/lib/libpapi.a \
                   ${ROOT_PATH}/widgets/gsl/lib/libgsl.so \
                   ${ROOT_PATH}/widgets/gsl/lib/libgslcblas.so \
                   -Wl,-rpath ${ROOT_PATH}/widgets/gsl/lib \
-	          -lpthread
-RAPL_ENABLED = 0
+	          -lpthread -lpapi
+
+
+MRNET_CXXFLAGS = -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -fno-default-inline \
+                    -Dos_linux \
+                    -Wall -Wno-system-headers -Wfloat-equal -Wconversion -Wshadow -Wpointer-arith \
+                    -Wcast-qual -Wcast-align -Wwrite-strings -Wsign-compare -Wredundant-decls -Wlong-long
+
+LDFLAGS = -Wl,-E
+
+MRNET_SOFLAGS = -fPIC -shared -rdynamic
+
+MRNET_LIBS = -L/home/usw/Install/MRnet/mrnet_4.1.0/build/x86_64-unknown-linux-gnu/lib -lmrnet -lxplat -lm -lpthread -ldl
+
+RAPL_ENABLED = 1
 ifeq (${RAPL_ENABLED}, 1)
 SIGHT_LINKFLAGS += ${ROOT_PATH}/widgets/libmsr/lib/libmsr.so \
                     -Wl,-rpath ${ROOT_PATH}/widgets/libmsr/lib
 endif
 	                
-	                #-Wl,-rpath ${ROOT_PATH}/widgets/papi/lib 
+	                #-Wl,-rpath ${ROOT_PATH}/widgets/papi/lib \
 override CC=gcc
 override CCC=g++
 MPICC = mpi${CC}
@@ -76,11 +96,10 @@ ifeq (${OS}, Cygwin)
 VNC_ENABLED := 0
 else
 # Default distribution disables VNC 
-#VNC_ENABLED := 0
+VNC_ENABLED := 0
 # VNC is only enabled if remote services are enabled
-ifeq (${REMOTE_ENABLED}, 1)
- VNC_ENABLED := 1 
-endif
+#ifeq (${REMOTE_ENABLED}, 1)
+# VNC_ENABLED := 1 
 endif
 
 # By default we disable KULFI-based fault injection since it requires LLVM
@@ -147,6 +166,28 @@ ifeq (${REMOTE_ENABLED}, 1)
 	cd examples; ../apps/mfem/mfem/examples/ex1 ../apps/mfem/mfem/data/beam-quad.mesh
 endif
 
+
+#rules for MRNet Integration
+sight_mrnet: sight_mrnet_fe sight_mrnet_so sight_mrnet_be
+	mv smrnet_fe mrnet/bin
+	mv smrnet_be mrnet/bin
+	mv libsmrnet_filter.so mrnet/bin
+	cp examples/4.AttributeAnnotationFiltering mrnet/bin
+
+sight_mrnet_fe: ${SIGHT_MRNET_FE} ${SIGHT_MRNET_H}
+	${CCC} ${SIGHT_CFLAGS} ${MRNET_CXXFLAGS} mrnet/mrnet_front.C -Wl,--whole-archive libsight_structure.so -Wl,-no-whole-archive  -DMFEM -I. ${SIGHT_LINKFLAGS} -o smrnet_fe${EXE} ${MRNET_LIBS}
+
+sight_mrnet_so: ${SIGHT_MRNET_SO} ${SIGHT_MRNET_H} process.C process.h libsight_structure.so
+	${CCC} ${SIGHT_CFLAGS} ${MRNET_CXXFLAGS} ${MRNET_SOFLAGS}  mrnet/mrnet_producer.C  mrnet/mrnet_tr_callback.C mrnet/mrnet_threads.C  -Wl,--whole-archive libsight_structure.so  -Wl,-no-whole-archive -DMFEM -I. ${SIGHT_LINKFLAGS} -o libsmrnet_filter.so
+
+sight_mrnet_be: ${SIGHT_MRNET_BE} ${SIGHT_MRNET_H}
+	${CCC} ${SIGHT_CFLAGS} ${MRNET_CXXFLAGS} mrnet/mrnet_emmitter.C -Wl,--whole-archive -Wl,-no-whole-archive  -DMFEM -o smrnet_be${EXE} ${MRNET_LIBS}
+
+sight_mrnet_clean: 
+	rm -rf mrnet/bin/smrnet_*
+	rm -rf mrnet/bin/libsmrnet_filter.so
+	rm -rf mrnet/bin/dbg.*
+
 #runMCBench:
 #	apps/mcbench/src/MCBenchmark.exe --nCores=1 --distributedSource --numParticles=13107 --nZonesX=256 --nZonesY=256 --xDim=16 --yDim=16 --mirrorBoundary --multiSigma --nThreadCore=1
 
@@ -173,7 +214,7 @@ libsight_common.a: ${SIGHT_COMMON_O} ${SIGHT_COMMON_H} widgets_pre
 	ar -r libsight_common.a ${SIGHT_COMMON_O} widgets/*/*_common.o
 
 libsight_structure.so: ${SIGHT_STRUCTURE_O} ${SIGHT_STRUCTURE_H} ${SIGHT_COMMON_O} ${SIGHT_COMMON_H} widgets_pre
-	${CC} -shared  -Wl,-soname,libsight_structure.so -o libsight_structure.so  ${SIGHT_STRUCTURE_O} ${SIGHT_COMMON_O} widgets/*/*_structure.o widgets/*/*_common.o
+	${CC} -shared  -Wl,-soname,libsight_structure.so -o libsight_structure.so  ${SIGHT_STRUCTURE_O} ${SIGHT_COMMON_O} widgets/*/*_structure.o widgets/*/*_common.o ${MRNET_LIBS}
 
 #libsight_structure.a: ${SIGHT_STRUCTURE_O} ${SIGHT_STRUCTURE_H} ${SIGHT_COMMON_O} ${SIGHT_COMMON_H} widgets_pre
 #	ar -r libsight_structure.a ${SIGHT_STRUCTURE_O} ${SIGHT_COMMON_O} widgets/*/*_structure.o widgets/*/*_common.o
@@ -247,33 +288,32 @@ sightDefines.pl:
 
 Makefile.extern: initMakefile.extern
 	chmod 755 initMakefile.extern
-	./initMakefile.extern ${CC} ${CCC} ${RAPL_ENABLED} ${LLVM32_SRC_PATH} ${LLVM32_BUILD_PATH} ${LLVM32_INSTALL_PATH}
+	./initMakefile.extern ${CC} ${CCC} ${RAPL_ENABLED}
 
 definitions.h: initDefinitionsH
 	chmod 755 initDefinitionsH
 	./initDefinitionsH ${RAPL_ENABLED}
 
-clean:
-	cd widgets; make -f Makefile_pre clean
-	cd widgets; make -f Makefile_post clean
-	cd tools; make -f Makefile clean
-	cd tools make clean
+clean: sight_mrnet_clean
 	cd examples; make clean
+#	cd widgets; make -f Makefile_pre clean
+#	cd widgets; make -f Makefile_post clean
+#	cd tools; make -f Makefile clean
+#	cd tools make clean
 #	cd apps/mcbench; ./clean-linux-x86_64.sh
 	cd apps/mfem; make clean
-	rm -rf Makefile.extern definitions.h dbg dbg.* *.a *.so *.o widgets/shellinabox* widgets/mongoose* widgets/graphviz* gdbLineNum.pl
-	rm -rf script/taffydb sightDefines.pl gdbscript
+	rm -rf dbg dbg.* *.a *.o widgets/shellinabox* widgets/mongoose* widgets/graphviz* gdbLineNum.pl
+#	rm -rf script/taffydb sightDefines.pl gdbscript
 	rm -f slayout hier_merge
 
 clean_objects:
-	rm -f Makefile.extern definitions.h *.a *.so *.o attributes/*.o widgets/*.o widgets/*/*.o hier_merge slayout
-	cd widgets/kulfi; make clean
+	rm -f *.a *.o attributes/*.o widgets/*.o widgets/*/*.o hier_merge slayout
 
 script/taffydb:
 	#cd script; wget --no-check-certificate https://github.com/typicaljoe/taffydb/archive/master.zip
 	#cd script; mv master master.zip; unzip master.zip
 	#rm script/master*
-	cd script; ../getGithub https://github.com/typicaljoe/taffydb/archive/master.zip zip unzip
-	mv script/taffydb-master script/taffydb
+	#cd script; ../getGithub https://github.com/typicaljoe/taffydb/archive/master.zip zip unzip
+	#mv script/taffydb-master script/taffydb
 	chmod 755 script/taffydb
 	chmod 644 script/taffydb/*

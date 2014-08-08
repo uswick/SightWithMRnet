@@ -3,18 +3,10 @@
 #include <map>
 #include <iostream>
 #include <sys/stat.h>
-#include "process.h"
-//#include "process.C"
 #include <iostream>
 #include "mrnet/MRNet.h"
 #include "mrnet_integration.h"
 #include "AtomicSyncPrimitives.h"
-
-
-using namespace std;
-using namespace sight;
-#include "sight_layout.h"
-using namespace sight::layout;
 
 
 //#define VERBOSE
@@ -88,6 +80,12 @@ int main(int argc, char **argv)
     const char * topology_file = argv[1];
     const char * so_file = argv[2];
     const char * dummy_argv=NULL;
+
+    FILE * structureFile;
+    structureFile = fopen ("/home/usw/Install/sight/sight/sight/mrnet/bin/mrnet.Attrib/structure","w");
+    if (structureFile!=NULL) {
+        printf("OUT File ok \n");
+    }
 
     int nets = 1;
 
@@ -226,7 +224,7 @@ int main(int argc, char **argv)
 
             fprintf(stdout, "FE: Iteration %d: Success! \n values : ", 0);
             for(int j = 0 ; j < length ; j++){
-                fprintf(stdout, "%s :", recv_Ar[j]);
+                fprintf(structureFile, "%c", recv_Ar[j]);
             }
             fprintf(stdout, "\n[FE: Display values done!] \n");
 
@@ -234,11 +232,14 @@ int main(int argc, char **argv)
 
         if( saw_failure ) {
             fprintf( stderr, "FE: a network process has failed, killing network\n" );
+            fflush(structureFile);
+            fclose(structureFile);
             delete net;
         }
         else {
             delete add_stream;
-
+            fflush(structureFile);
+            fclose(structureFile);
             // Tell back-ends to exit
             Stream * ctl_stream = net->new_Stream( comm_BC, TFILTER_MAX,
                     SFILTER_WAITFORALL );

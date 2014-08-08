@@ -1,9 +1,7 @@
 #include "mrnet/MRNet.h"
 #include "mrnet_integration.h"
-#include "../process.h"
 
 using namespace MRN;
-using namespace sight;
 /**
 * acts as the BE emitter
 * if MRNET_MERGE_EXEC is defined  (at #sightInit()) then execute this process
@@ -32,8 +30,9 @@ int main(int argc, char **argv)
     int rc, tag=0, num_iters=0;
     int send_val = 10 ;
     int recv_val ;
+    int wave = 0;
 
-    char sendAr[TOTAL_PACKET_SIZE];
+    char* sendAr = (char*)malloc(TOTAL_PACKET_SIZE);
 
     Network * net = Network::CreateNetworkBE( argc, argv );
 
@@ -59,11 +58,19 @@ int main(int argc, char **argv)
             printf("Init BE pid : %d : values :", getpid());
                 // Send integer arrays as waves - simulate buffer waves
                 for (int i = 0; i < num_iters; i++) {
-                    if (!feof(f)) {
+                    while (!feof(f)) {
                         size_t bytes_read = populateBuffer(sendAr, f);
+                        fprintf(stdout, "BE: Sending wave %d ..\n", wave++);
+                        fprintf(stdout, "BE: Sending wave wait send Auc.. bytes read : %d \n", bytes_read);
+                        sleep(5);
 
-                        fprintf(stdout, "BE: Sending wave %u ...\n", i);
+                        for(int j = 0 ; j < bytes_read ; j++){
+                            printf("%c",sendAr[j]);
+                        }
+                        printf("\n\n\n");
+
                         if (stream->send(tag, "%ac", sendAr, bytes_read) == -1) {
+//                        if (stream->send(tag, "%ac", sendAr2, 3) == -1) {
                             fprintf(stderr, "BE: stream::send(%%d) failure in PROT_CONCAT\n");
                             tag = PROT_EXIT;
                             break;
@@ -72,17 +79,24 @@ int main(int argc, char **argv)
                             fprintf(stderr, "BE: stream::flush() failure in PROT_CONCAT\n");
                             break;
                         }
+                        fprintf(stdout, "BE: Sending wave Done..... \n");
                         fflush(stdout);
                         sleep(2); // stagger sends
-                    } else{
-                        //End of stream go to exit stage
-                        //todo handle this properly - introduce new state ? ie:- PROT_EOF_STREAM
-                        if (stream->send(PROT_END_PHASE, "%c", 'e', 1) == -1) {
+                    }
+
+                    fprintf(stdout, "BE: Sending last packet.. bytes read : \n");
+                    sleep(5);
+                    //End of stream go to exit stage
+                    //todo handle this properly - introduce new state ? ie:- PROT_EOF_STREAM
+                    char* dummy = (char*) malloc(1);
+                    *dummy = ' ';
+                    if (stream->send(PROT_END_PHASE, "%ac", dummy, 1) == -1) {
                             fprintf(stderr, "BE: stream::send(%%d) failure in PROT_CONCAT\n");
                             tag = PROT_EXIT;
-                            break;
-                        }
                     }
+                    break;
+
+
                 }
                 break;
 

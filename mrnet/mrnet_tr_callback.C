@@ -19,14 +19,13 @@ using namespace atomiccontrols;
 
 extern "C" {
 
-const char *SightStreamAggregator_format_string = "%d";
+const char *SightStreamAggregator_format_string = "%ac";
 
 typedef struct {
     MRNetThread *th;
     MRNetProducer *prod;
     AtomicSync *synchronizer;
-    std::vector<char> *inputQueue;
-    std::vector<char> *outputQueue;
+    std::vector<DataPckt> *inputQueue;
 } glst_t;
 
 
@@ -39,9 +38,9 @@ void SightStreamAggregator(std::vector< PacketPtr > &packets_in,
         PacketPtr & /* params */,
         const TopologyLocalInfo &inf) {
 
-#ifdef DEBUG_ON
+//#ifdef DEBUG_ON
     fprintf(stdout, "[MRNet FILTER METHOD started.. PID : %d ]\n", getpid());
-#endif
+//#endif
     Network *net = const_cast< Network * >( inf.get_Network() );
     PacketPtr first_packet = packets_in[0];
     int stream_id = first_packet->get_StreamId();
@@ -53,10 +52,19 @@ void SightStreamAggregator(std::vector< PacketPtr > &packets_in,
     if (peers.size() == 0 && first_packet->get_InletNodeRank() == -1) {
         Rank r = -1;
         peers.insert(-1);
+        //special BE optimization
+        std::vector< PacketPtr >::iterator in;
+        for( in = packets_in.begin() ; in != packets_in.end(); in++) {
+            packets_out.push_back(*in);
+        }
+        return;
+
+//#ifdef DEBUG_ON
+        fprintf(stdout, "[MRNet FILTER - case BE node.. PID : %d ]\n", getpid());
+//#endif
     }
     glst_t *state = initAndGetGlobal(state_data, stream, peers, net, stream_id, tag_id);
     state->prod->loadBuffer(packets_in, inf);
-    state->prod->checkEOStream(packets_in);
 
 #ifdef DEBUG_ON
     printf("[MRNet FILTER method completed!...pid : %d ] \n", getpid());
@@ -75,7 +83,7 @@ glst_t *initAndGetGlobal(void **state_data, Stream *stream, set<Rank> &peers, Ne
         global_state->th = th;
         //create producer for call back
         global_state->prod = new MRNetProducer(th->getInputBuffer(), th->getInputMutex(), th->getPerRankSignals(),
-                peers, stream, net, global_state->synchronizer, th->getStreamFlags(), th->getFlagsMutex());
+                peers, stream, net, global_state->synchronizer);
         *state_data = global_state;
     } else {
         global_state = (glst_t *) (*state_data);

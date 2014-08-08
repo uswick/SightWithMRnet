@@ -20,7 +20,7 @@
 #include "fdstream.h"
 #include "process.h"
 #include "process.C"
-#import "integral_wrapper.hpp"
+//#import "integral_wrapper.hpp"
 
 using namespace std;
 using namespace sight::common;
@@ -1885,6 +1885,13 @@ dbgStream::dbgStream(properties* props, string title, string workDir, string img
   init(props, title, workDir, imgDir, tmpDir);
 }
 
+dbgStream::dbgStream(properties* props, string title, string workDir, string imgDir, std::string tmpDir, bool no_init)
+: common::dbgStream(&defaultFileBuf), sightObj(this)
+{
+    if(!no_init)
+        init(props, title, workDir, imgDir, tmpDir);
+}
+
 void dbgStream::init(properties* props, string title, string workDir, string imgDir, std::string tmpDir)
 {
   this->title   = title;
@@ -1893,10 +1900,10 @@ void dbgStream::init(properties* props, string title, string workDir, string img
   this->tmpDir  = tmpDir;
 
   numImages++;
-  
-  // Version 1: write output to a file 
+  // Version 1: write output to a file
   // Create the output file to which the debug log's structure will be written
   if(getenv("SIGHT_FILE_OUT")) {
+    printf("DBG INIT... SIGHT_OUT \n");
     dbgFile = &(createFile(txt()<<workDir<<"/structure"));
     // Call the parent class initialization function to connect it dbgBuf of the output file
     buf=new dbgBuf(dbgFile->rdbuf());
@@ -1918,6 +1925,7 @@ void dbgStream::init(properties* props, string title, string workDir, string img
     buf = new dbgBuf(new fdoutbuf(outFD));
   // Version 3 (default): write output to a pipe for the default slayout to use immediately
   }  else if(getenv("MRNET_MERGE_EXEC")) {
+      printf("DBG INIT... MRNET_MERGE_EXEC \n");
       dbgFile = NULL;
       // Unset the mutex environment variables from LoadTimeRegistry to make sure that they don't leak to the layout process
       LoadTimeRegistry::liftMutexes();
@@ -1933,6 +1941,7 @@ void dbgStream::init(properties* props, string title, string workDir, string img
       buf = new dbgBuf(new fdoutbuf(outFD));
       // Version 3 (default): write output to a pipe for the default slayout to use immediately
   } else if(buf == NULL) {
+    printf("DBG INIT... ELSE BUF == NULL \n");
     dbgFile = NULL;
     // Unset the mutex environment variables from LoadTimeRegistry to make sure that they don't leak to the layout process
     LoadTimeRegistry::liftMutexes();
@@ -1952,11 +1961,13 @@ void dbgStream::init(properties* props, string title, string workDir, string img
   this->props = props; 
   //if(props) enter(this);
   sightObj::init(props, false);
-
+  printf("DBG SIGHT INIT DONE... \n");
   // The application may have written text to this dbgStream before it was fully initialized.
   // This text was stored in preInitStream. Print it out now.
   ownerAccessing();
+  printf("DBG OWNER ACCESS INIT DONE... \n");
   *this << preInitStream.str();
+  printf("DBG PRESTREAM INIT DONE... \n");
   userAccessing();
   
   initialized = true;
@@ -2075,12 +2086,14 @@ string dbgStream::addImage(string ext)
 //void dbgStream::enter(std::string name, const std::map<std::string, std::string>& properties, bool inheritedFrom) {
 void dbgStream::enter(sightObj* obj) {
   ownerAccessing();
+  printf("#DBG-OUT dbgstream << operator method enter [sightobj] [string] char_str : %s  \n", enterStr(*(obj->props)).c_str());
   *this << enterStr(*(obj->props));
   userAccessing();
 }
 
 void dbgStream::enter(const properties& props) {
   ownerAccessing();
+  printf("#DBG-OUT dbgstream << operator method enter [props] [string] char_str : %s  \n", enterStr(props).c_str());
   *this << enterStr(props);
   userAccessing();
 }
@@ -2114,12 +2127,15 @@ void dbgStream::exit(sightObj* obj) {
   ownerAccessing();
 /*cout << "props="<<obj->props->str()<<endl;
 cout << exitStr(*(obj->props)) << endl;*/
+  printf("#DBG-OUT dbgstream << operator method exit [sightobj] [string] char_str : %s  \n", exitStr(*(obj->props)).c_str());
   *this << exitStr(*(obj->props));
   userAccessing();
 }
 
 void dbgStream::exit(const properties& props) {
   ownerAccessing();
+
+  printf("#DBG-OUT dbgstream << operator method exit [props] [string] char_str : %s  \n", exitStr(props).c_str());
   *this << exitStr(props);
   userAccessing();
 }
@@ -2156,6 +2172,19 @@ std::string dbgStream::tagStr(const properties& props) {
  ***** MRNet Stream *****
  ************************/
 
+ MRNetostream::~MRNetostream()  {
+            if (!init)
+                return;
+
+            if(!getEmitExitTag())
+                return;
+            // Emit the exit tag for this dbgStream
+            this->exit(getSightObject());
+            setEmitExitTag(false);
+ }
+
+
+
 template <typename T>
 inline MRNetostream &
 operator <<(MRNetostream &out, const T &value) {
@@ -2171,8 +2200,8 @@ operator <<(MRNetostream &out, const char *s) {
                 length++;
             };
             //todo currently we push all data out
-            //buffer if possible
-            out.transferData(s, length);
+            printf("#OUT MRNetostream << operator method [char] char_str : %s pid : %d  \n", s, getpid());
+            out.transferData(s, length, false);
             return out;
 }
 
@@ -2180,7 +2209,8 @@ operator <<(MRNetostream &out, const char *s) {
 template <>
 inline MRNetostream &
 operator<<(MRNetostream & out, const std::string& value){
-            out.transferData(value.c_str(), (int) value.size());
+            printf("<<<<<<<<<< OUT MRNetostream << operator method [string] size : %d pid: %d --- char_str : %s \n", (int) value.size(), getpid(), value.c_str());
+            out.transferData(value.c_str(), (int) value.size(), false);
             return out ;
  }
 
@@ -2191,43 +2221,143 @@ operator <<(MRNetostream &out, std::ostream &(*func)(std::ostream &)) {
             return out;
 }
 
-bool MRNetostream::transferData(char* buf, int length){
-    if(length > 0){
-        //check if we should set outgoing packet as the last/final packet of this stream
-        std::map<Rank, int*>::iterator it = stream_end_flags.begin();
-        bool set_final = true ;
-        for(; it != stream_end_flags.end() ; it++){
-            synchronizer->set_mutex_lock(flagsMutex);
-            int* flag = it->second;
-            if(*flag == 1){
-                set_final = set_final && true;
-            }else {
-                set_final = false;
-                break;
-            }
-            synchronizer->set_mutex_unlock(flagsMutex);
-        }
+void MRNetostream::enter(sightObj* obj) {
+            ownerAccessing();
+            printf("#MRNET-OUT MRNetostream << operator method enter [sightobj] [string] char_str : %s  \n", enterStr(*(obj->props)).c_str());
+            *this << enterStr(*(obj->props));
+            userAccessing();
+}
 
-        Packet * pckt;
-        if(!set_final){
-                pckt = new Packet(strm_id, tag_id, "%ac", buf, length);
-        }else {
-                pckt = new Packet(strm_id, PROT_END_PHASE, "%ac", buf, length);
+void MRNetostream::enter(const properties& props) {
+            ownerAccessing();
+            printf("#MRNET-OUT MRNetostream << operator method enter [props][string] char_str : %s  \n", enterStr(props).c_str());
+            *this << enterStr(props);
+            userAccessing();
+}
+
+void MRNetostream::exit(sightObj* obj) {
+            ownerAccessing();
+            printf("#MRNET-OUT MRNetostream << operator method exit [sightobj] [string] char_str : %s  \n", exitStr(*(obj->props)).c_str());
+            *this << exitStr(*(obj->props));
+            userAccessing();
+}
+
+void MRNetostream::exit(const properties& props) {
+            ownerAccessing();
+            printf("#MRNET-OUT MRNetostream << operator method exit [props] [string] char_str : %s  \n", exitStr(props).c_str());
+            *this << exitStr(props);
+            userAccessing();
+}
+
+bool MRNetostream::transferData(const char* buf, int length, bool set_final = false){
+    if(length > 0){
+        /****REMOVE******/
+        fprintf(stdout, "\n\n\n\n\n<<<<<<<< WRITE TO QUEUE : Transfer..pid : %d bytes read : %d \n", getpid()
+        ,length);
+        for(int j = 0 ; j < length ; j++){
+            printf("%c",buf[j]);
         }
-        PacketPtr new_packet (pckt);
-        if(net->is_LocalNodeFrontEnd()){
+        printf("\n\n\n\n\n");
+        /****REMOVE******/
+        writeQueue(buf, length);
+        fprintf(stdout, "<<<<<<<< WRITE TO QUEUE Done : Transfer..pid : %d bytes read : %d \n", getpid()
+                ,length);
+        int len = 0;
+        while((len=readQueue()) > 0){
+            fprintf(stdout, "<<<<<<<< Transfer DATA #1 : Transfer..pid : %d bytes read : %d  buf[0] : %c  bud[n] : %c \n", getpid(), len
+            , buf[0], buf[len]);
+            Packet *pckt;
+            sleep(8);
+            printf("going to CRASH!!!.. \n");
+            pckt = new Packet(strm_id, tag_id, "%ac", buffer, len);
+            /*REMOVEE*/
+            fprintf(stdout, "OUT-Structure: Transfer wave %d ..\n",wave++);
+            fprintf(stdout, "OUT-Structure: Transfer wave wait send Auc.. bytes read : %d \n", len);
+            sleep(5);
+            for(int j = 0 ; j < len ; j++){
+                printf("%c",buffer[j]);
+            }
+            printf("\n\n\n\n\n");
+            /*REMOVE*/
+            PacketPtr new_packet (pckt);
+            if (net->is_LocalNodeFrontEnd()) {
 //            FE Processing
-            printf("#MRNet Merger method FE net : %p pid : %d  \n", net, getpid());
-            strm->add_IncomingPacket(new_packet);
-        }   else{
+                printf("#MRNet Merger method FE net : %p pid : %d  \n", net, getpid());
+                strm->add_IncomingPacket(new_packet);
+                strm->flush();
+            } else {
 //            INternal or BE node processing
-            printf("#MRNet Merger method Internal/BE net : %p  pid : %d \n", net, getpid());
-            net->send_PacketToParent(new_packet);
+                printf("#MRNet Merger method Internal/BE net : %p  pid : %d \n", net, getpid());
+                net->send_PacketToParent(new_packet);
+                net->flush();
+            }
         }
+        //handle end of stream
+        setEofStream(set_final);
+        fprintf(stdout, "<<<<<<<< Transfer DATA #2 : Transfer..pid : %d bytes read : %d \n", getpid(), len);
+        len = readQueue();
+        fprintf(stdout, "<<<<<<<< Transfer DATA #3 : Transfer..pid : %d bytes read : %d \n", getpid(), len);
+        if(eofStream()){
+            Packet *pckt;
+            if(len > 0){
+                pckt = new Packet(strm_id, PROT_END_PHASE, "%ac", buffer, len);
+            }else {
+                *buffer = ' ';
+                pckt = new Packet(strm_id, PROT_END_PHASE, "%ac", buffer, 1);
+            }
+            PacketPtr final_packet (pckt);
+            if (net->is_LocalNodeFrontEnd()) {
+//            FE Processing
+                printf("#MRNet Merger final_packet method FE net : %p pid : %d  \n", net, getpid());
+                strm->add_IncomingPacket(final_packet);
+                strm->flush();
+            } else {
+//            INternal or BE node processing
+                printf("#MRNet Merger final_packet method Internal/BE net : %p  pid : %d \n", net, getpid());
+                net->send_PacketToParent(final_packet);
+                net->flush();
+            }
+        }
+        fprintf(stdout, "<<<<<<<< Exit Transfer TO QUEUE : Transfer..pid : %d bytes read : %d \n", getpid()
+                ,length);
         return true;
     }
     return false;
 }  ;
+
+/**
+    Read from queue into buffer
+ */
+        /**
+           Read from queue into buffer
+        */
+ size_t MRNetostream::readQueue(){
+            printf("READ QUEUE start!!!..buf size : %d \n", buffer_queue.size());
+            //if queue exceeds/equal to the TOTAL_PACKET_SIZE size then copy first TOTAL_PACKET_SIZE elements
+            // return TOTAL_PACKET_SIZE
+            if(buffer_queue.size() >= TOTAL_PACKET_SIZE){
+                std::vector<char>::iterator it = buffer_queue.begin();
+                for(int j = 0 ; j < TOTAL_PACKET_SIZE ; j++){
+                    buffer[j] = *it;
+                    it = buffer_queue.erase(it);
+                }
+                printf("READ QUEUE > TOTAL_PACKT!!!..buf size : %d \n", buffer_queue.size());
+                return TOTAL_PACKET_SIZE;
+            } else if(eofStream()){
+                //if not exceeds but is the last packet then return what ever in the queue -
+                //return queue.size
+                std::copy(buffer_queue.begin(), buffer_queue.end(), buffer);
+                int buf_size = buffer_queue.size();
+                buffer_queue.clear();
+                printf("READ QUEUE < TOTAL && EOS!!!..ret size : %d buffer_size \n", buf_size, buffer_queue.size());
+                return buf_size;
+            } else {
+                printf("READ QUEUE < TOTAL!!!..ret size : %u \n", (size_t) 0);
+                //if not exceeds do nothing - return 0
+                return (size_t) 0 ;
+            }
+        }
+
 
 /***************************
  ***** dbgStreamMerger *****
