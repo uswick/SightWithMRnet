@@ -338,7 +338,9 @@ int merge(vector<MRNetParser*>& parsers,
   assert((variantStackDepth==0 && nextTag.size()==0) ||
          (variantStackDepth>0  && nextTag.size()==parsers.size()));
 
+#ifdef DEBUG_ON
   fprintf(stdout, "[MRNetMerge() [#1] PID : %d number of iterators : %d ]\n", getpid(), parsers.size());
+#endif
   // The current depth of the nesting stack of tags that have been entered but not yet exited. If nextTag
   // is not empty, stackDepth is set to 1 to account for the entry tag read by the caller of merge(). 
   // Otherwise stackDepth is set to 0.
@@ -357,7 +359,7 @@ int merge(vector<MRNetParser*>& parsers,
   anchor lastIterA  = anchor::noAnchor;
   anchor curIterA   = anchor::noAnchor;
   anchor lastRecurA = anchor::noAnchor;
-  fprintf(stdout, "[MRNetMerge() [#2] PID : %d number of iterators : %d ]\n", getpid(), parsers.size());
+//  fprintf(stdout, "[MRNetMerge() [#2] PID : %d number of iterators : %d ]\n", getpid(), parsers.size());
   while(numActive>0) {
     #ifdef VERBOSE
     //dbg << "=================================, numActive="<<numActive<<"\n";
@@ -372,19 +374,18 @@ int merge(vector<MRNetParser*>& parsers,
     int numSightEnterTags=0;
     int numSightExitTags=0;
 
-    fprintf(stdout, "[MRNetMerge() [#3] PID : %d number of iterators : %d ]\n", getpid(), parsers.size());
+//    fprintf(stdout, "[MRNetMerge() [#3] PID : %d number of iterators : %d ]\n", getpid(), parsers.size());
     // Read the next tag on each parser, updating nextTag and tag2stream
     for(vector<MRNetParser*>::iterator p=parsers.begin(); p!=parsers.end(); p++, parserIdx++) {
       #ifdef VERBOSE
       dbg << "readyForTag["<<parserIdx<<"]="<<readyForTag[parserIdx]<<", activeParser["<<parserIdx<<"]="<<activeParser[parserIdx]<<endl;
       #endif
 
-      fprintf(stdout, "[MRNetMerge() [#3.a] PID : %d number of iterators : %d ]\n", getpid(), parsers.size());
+//      fprintf(stdout, "[MRNetMerge() [#3.a] PID : %d number of iterators : %d ]\n", getpid(), parsers.size());
       // If we're ready to read a tag on this parser
       if(readyForTag[parserIdx] && activeParser[parserIdx]) {
-        fprintf(stdout, "[MRNetMerge() [#3.b] PID : %d number of iterators : %d ]\n", getpid(), parsers.size());
+//        fprintf(stdout, "[MRNetMerge() [#3.b] PID : %d number of iterators : %d ]\n", getpid(), parsers.size());
         pair<properties::tagType, const properties*> props = (*p)->next();
-        fprintf(stdout, "[MRNetMerge() [#3.c] PID : %d number of iterators : %d ]\n", getpid(), parsers.size());
         #ifdef VERBOSE
         {scope s(txt()<<indent << "| "<<parserIdx << ": "<<
                        (props.first==properties::enterTag? "enter": "exit")<<" "<<
@@ -448,7 +449,7 @@ int merge(vector<MRNetParser*>& parsers,
       }
     }
 
-    fprintf(stdout, "[MRNetMerge() [#4] PID : %d number of iterators : %d ]\n", getpid(), parsers.size());
+//    fprintf(stdout, "[MRNetMerge() [#4] PID : %d number of iterators : %d ]\n", getpid(), parsers.size());
     #ifdef VERBOSE
     dbg << "numSightEnterTags="<<numSightEnterTags<<", numSightExitTags="<<numSightExitTags<<", numTextTags="<<numTextTags<<", numActive="<<numActive<<", nextTag("<<nextTag.size()<<")"<<endl;
     #endif
@@ -479,10 +480,10 @@ int merge(vector<MRNetParser*>& parsers,
       // Create the new dbgStream using a freshly-allocated properties object to enable the 
       // Merger and the dbgStream to have and ultimately deallocate their own copies 
       // (optimization opportunity to use smart pointers and avoid the extra allocation)
-      fprintf(stdout, "[MRNetMerge() [#5] PID : %d number of iterators : %d ]\n", getpid(), parsers.size());
+//      fprintf(stdout, "[MRNetMerge() [#5] PID : %d number of iterators : %d ]\n", getpid(), parsers.size());
       MRNetostream* dbgMRnetOut = createMRnetStream(new properties(m->getProps()), true, strm, net, strm_id, tag_id);
       out = dbgMRnetOut;
-      fprintf(stdout, "[MRNetMerge() [#6] PID : %d number of iterators : %d ]\n", getpid(), parsers.size());
+//      fprintf(stdout, "[MRNetMerge() [#6] PID : %d number of iterators : %d ]\n", getpid(), parsers.size());
       // The merger is no longer needed
       delete m;
       
@@ -858,21 +859,15 @@ int merge(vector<MRNetParser*>& parsers,
       }
     } // If we only entered or exited tags
   } // while(numActive>0)
-  fprintf(stdout, "[MRNetMerge() [#NEAR END] PID : %d number of iterators : %d ]\n", getpid(), parsers.size());
 //  dbg << "END: numActive="<<numActive<<endl;
   // We reach this point if all parsers have terminated
-  //send final terminating packet
-  if(out != NULL){
-      char* dummy = (char*)malloc(1);
-      *dummy = ' ';
-      out->transferData(dummy, 1, true);
-  }
+
 // If we're at the highest level of the merging stack and the output stream has been 
   // created but not deleted, delete it now
   if(variantStackDepth==0 && out!=NULL)
      delete out;
 
-  fprintf(stdout, "[MRNetMerge() [#END] PID : %d number of iterators : %d ]\n", getpid(), parsers.size());
+  fprintf(stdout, "[MRNetMerge() [#END] PID : %d started with [%d] number of iterators ]\n", getpid(), parsers.size());
   #ifdef VERBOSE
   { scope lastS("END", scope::minimum);
     if(lastIterA  != anchor::noAnchor) g.addDirEdge(lastIterA,  lastS.getAnchor());

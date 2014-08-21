@@ -38,9 +38,10 @@ void SightStreamAggregator(std::vector< PacketPtr > &packets_in,
         PacketPtr & /* params */,
         const TopologyLocalInfo &inf) {
 
-//#ifdef DEBUG_ON
-    fprintf(stdout, "[MRNet FILTER METHOD started.. PID : %d ]\n", getpid());
-//#endif
+#ifdef DEBUG_ON
+    fprintf(stdout, "[MRNet FILTER METHOD just started.. PID : %d ]\n", getpid());
+    fflush(stdout);
+#endif
     Network *net = const_cast< Network * >( inf.get_Network() );
     PacketPtr first_packet = packets_in[0];
     int stream_id = first_packet->get_StreamId();
@@ -59,9 +60,9 @@ void SightStreamAggregator(std::vector< PacketPtr > &packets_in,
         }
         return;
 
-//#ifdef DEBUG_ON
+#ifdef DEBUG_ON
         fprintf(stdout, "[MRNet FILTER - case BE node.. PID : %d ]\n", getpid());
-//#endif
+#endif
     }
     glst_t *state = initAndGetGlobal(state_data, stream, peers, net, stream_id, tag_id);
     state->prod->loadBuffer(packets_in, inf);

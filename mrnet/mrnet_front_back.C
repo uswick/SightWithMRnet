@@ -93,11 +93,9 @@ int main(int argc, char **argv)
     const char * dummy_argv=NULL;
 
     FILE * structureFile;
-    structureFile = fopen ("/home/usw/Install/sight/sight/sight/mrnet/bin/mrnet.Attrib/structure","ab+");
+    structureFile = fopen ("/home/usw/Install/sight/sight/sight/mrnet/bin/mrnet.Attrib/structure","w");
     if (structureFile!=NULL) {
-#ifdef DEBUG_ON
-        printf("OUT File opened.. \n");
-#endif
+        printf("OUT File ok \n");
     }
 
     int nets = 1;
@@ -115,10 +113,9 @@ int main(int argc, char **argv)
         if( nets > 1 )
             fprintf(stdout, "\n\n---------- Network Instance %d ----------\n\n", n);
 
-#ifdef DEBUG_ON
         fprintf(stdout, "PID: %d top : %s , BE : %s dummy : %s num BEs : %d \n", getpid(),
                 topology_file, "no initialized BE", dummy_argv, num_backends);
-#endif
+
         // If backend_exe (2nd arg) and backend_args (3rd arg) are both NULL,
         // then all nodes specified in the topology are internal tree nodes.
         Network * net = Network::CreateNetworkFE( topology_file, NULL, NULL );
@@ -172,79 +169,67 @@ int main(int argc, char **argv)
             locker.set_mutex_unlock(&cb_lock);
             fprintf( stdout, " %d backends have been attached!\n", curr_count);
         } while( curr_count != waitfor_count );
-#ifdef DEBUG_ON
         fprintf( stdout, "All %u backends have attached!\n", waitfor_count);
-#endif
-//        Make sure path to "so_file" is in LD_LIBRARY_PATH
-        int filter_id = net->load_FilterFunc( so_file, "SightStreamAggregator" );
-        if( filter_id == -1 ){
-            fprintf( stderr, "Network::load_FilterFunc() failure\n" );
-            delete net;
-            return -1;
-        }
+
+        // Make sure path to "so_file" is in LD_LIBRARY_PATH
+//        int filter_id = net->load_FilterFunc( so_file, "SightStreamAggregator" );
+//        if( filter_id == -1 ){
+//            fprintf( stderr, "Network::load_FilterFunc() failure\n" );
+//            delete net;
+//            return -1;
+//        }
 
         // A Broadcast communicator contains all the back-ends
         Communicator * comm_BC = net->get_BroadcastCommunicator( );
 
         // Create a stream that will use the Integer_Add filter for aggregation
         Stream * add_stream = net->new_Stream( comm_BC,
-                                               filter_id,
-//                                               TFILTER_SUM,
-//                                               SFILTER_WAITFORALL );
-                SFILTER_DONTWAIT );
+//                                               filter_id,
+                                               TFILTER_SUM,
+                                               SFILTER_WAITFORALL );
+//                SFILTER_DONTWAIT );
 
         int num_backends2 = int(comm_BC->get_EndPoints().size());
 
         // Broadcast a control message to back-ends to send us "num_iters"
         // waves of integers
         tag = PROT_CONCAT;
-        //total number of waves are calculated using --> total number of integers we like to send / number of intergers per wave
-#ifdef DEBUG_ON
-        fprintf( stdout, "preparing to send INIT tags.. num_be : %d\n", num_backends2);
-#endif
-        unsigned int num_iters= TOTAL_STREAM_SIZE / TOTAL_PACKET_SIZE;
+//        unsigned int num_iters=5;
 
-        if( add_stream->send( tag, "%d %d", send_val, num_iters ) == -1 ){
+        //total number of waves are calculated using --> total number of integers we like to send / number of intergers per wave
+        unsigned int num_iters = 1;
+        fprintf( stdout, "preparing to send INIT tags with TFILTER_SUM as filter ! num_be : %d\n", num_backends2);
+        if( add_stream->send( 1, "%d %d", 1, 1 ) == -1 ){
             fprintf( stderr, "stream::send() failure\n" );
             return -1;
         }
+        fprintf( stdout, "INIT tags send done!\n");
         if( add_stream->flush( ) == -1 ){
             fprintf( stderr, "stream::flush() failure\n" );
             return -1;
         }
-#ifdef DEBUG_ON
-        fprintf( stdout, "INIT tag flush() done... \n");
-#endif
-
-/*
-* Main  loop where merged output is recieved from child nodes
-* */
+        fprintf( stdout, "INIT tag flush()\n");
+        sleep(10);
         char* recv_Ar;
         unsigned length;
-        int total_len = 0 ;
         // We expect "num_iters" aggregated responses from all back-ends
+//        for( unsigned int i=0; i < num_iters; i++ ){
         while(true){
 
             retval = add_stream->recv(&tag, p);
-#ifdef DEBUG_ON
             fprintf(stdout, "\n[FE: STREM->recv done ; retval : %d] \n", retval);
-#endif
             if(tag == PROT_END_PHASE){
                 //print any stream coming with protocol end phase
-#ifdef DEBUG_ON
-                fprintf(stdout, "FE: Iteration PROTOCOL END SUCCESS %d: \n", 0);
-#endif
+                fprintf(stdout, "FE: Iteration PROTOCOL END %d: Success! \n values : ", 0);
                 if( p->unpack( "%ac", &recv_Ar, &length ) == -1 ){
                     fprintf( stderr, "PROTOCOL END stream::unpack() failure\n" );
                     return -1;
                 }
-                total_len+= length;
                 for(int j = 0 ; j < length ; j++){
                     fprintf(structureFile, "%c", recv_Ar[j]);
                 }
-                fprintf(stdout, "\n[FE: PROTOCOL SUCCESS: Output stored: bytes written => most recent  : [%d] total : [%d] ] \n",
-                        length, total_len);
-                fflush(structureFile);
+                fprintf(stdout, "\n[FE: PROTOCOL END Display values done!] \n");
+
                 break;
             }
             if( retval == 0 ) {
@@ -265,11 +250,11 @@ int main(int argc, char **argv)
                 return -1;
             }
 
-            total_len += length;
+            fprintf(stdout, "FE: Iteration %d: Success! \n values : ", 0);
             for(int j = 0 ; j < length ; j++){
                 fprintf(structureFile, "%c", recv_Ar[j]);
             }
-//            fprintf(stdout, "\n[FE: Display values done!] \n");
+            fprintf(stdout, "\n[FE: Display values done!] \n");
 
         }
 
@@ -304,9 +289,10 @@ int main(int argc, char **argv)
             if( tag == PROT_EXIT ) {
                 // The Network destructor will cause all internal and leaf tree nodes to exit
                 delete net;
-                break;
             }
         }
+
+        sleep(5);
     }
 
 

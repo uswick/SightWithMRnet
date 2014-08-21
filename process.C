@@ -420,20 +420,24 @@ bool FILEStructureParser::streamError() {
  *******************************/
     static inline void printData(std::vector<char>& char_array){
         std::vector<char>::iterator it = char_array.begin();
+#ifdef DEBUG_ON
         printf("[MRNEtStructureParser() PRINT METHOD !!...pid : %d arr:size : %d ] \n", getpid(), char_array.size());
         while(it != char_array.end()){
             printf("%c",*it);
             it++;
         }
         printf("\n");
+#endif
     }
 
     size_t MRNetParser::readData() {
-        fprintf(stdout, "[MRNEtStructureParser() [#1] PID : %d ] \n", getpid()) ;
+//        fprintf(stdout, "[MRNEtStructureParser() [#1] PID : %d ] \n", getpid()) ;
         int num = 0;
 
         if(streamEnd()){
+#ifdef DEBUG_ON
             fprintf(stdout, "[MRNEtStructureParser() [#STREAM END RETURN] PID : %d ] \n", getpid()) ;
+#endif
             return (size_t) 0;
         }
         //wait for next 'TOTAL_PACKET_SIZE' number of integers from inputqueue
@@ -452,7 +456,7 @@ bool FILEStructureParser::streamError() {
             //get iterator for incoming queue
             std::vector<DataPckt>::iterator it = inputQueue->begin();
             std::vector<DataPckt>::iterator del;
-            fprintf(stdout, "[MRNEtStructureParser() [#2] PID : %d ] \n", getpid()) ;
+//            fprintf(stdout, "[MRNEtStructureParser() [#2] PID : %d ] \n", getpid()) ;
             bool is_last_pckt = false;
             for (; it != inputQueue->end();) {
                 DataPckt curr_pckt = *it ;
@@ -484,7 +488,6 @@ bool FILEStructureParser::streamError() {
                 is_last_pckt = curr_pckt.isFinal();
                 if(is_last_pckt) break;
             }
-            fprintf(stdout, "[MRNEtStructureParser() [#3] PID : %d ] \n", getpid()) ;
 
 #ifdef DEBUG_ON
         printf("[MRNetQueueIterator read from incoming queue.. PID : %d [TEMP values ]  --> ", getpid());
@@ -497,29 +500,29 @@ bool FILEStructureParser::streamError() {
             //indicate end of stream for the last packet
             if(is_last_pckt){
                 stream_end = true ;
-                fprintf(stdout, "[MRNEtStructureParser() [#4] PID : %d ] \n", getpid()) ;
+#ifdef DEBUG_ON
+                fprintf(stdout, "[MRNEtStructureParser() [Final packt] PID : %d ] \n", getpid()) ;
+#endif
                 break;
             }else if(num >= TOTAL_PACKET_SIZE){
                 break;
             }
 
         }
-        fprintf(stdout, "[MRNEtStructureParser() [#BEFORE END] PID : %d num_chars : %d queue size : %d ] \n",
-                getpid(),num, temp.size()) ;
 //        printData(temp);
         std::copy(temp.begin(), temp.end(), buf);
-        /*REMOVEE*/
+#ifdef DEBUG_ON
         fprintf(stdout, "Parser: Read wave %d ..\n",wave++);
         fprintf(stdout, "Parser: Read wave wait send Auc.. bytes read : %d \n", num);
         for(int j = 0 ; j < num ; j++){
             printf("%c",buf[j]);
         }
         printf("\n\n\n\n\n");
-        /*REMOVE*/
+#endif
 
         //update total integers recieved
         total_ints += num;
-        fprintf(stdout, "[MRNEtStructureParser() [#END] PID : %d stream end? %b ] \n", getpid(), streamEnd()) ;
+//        fprintf(stdout, "[MRNEtStructureParser() [#END] PID : %d stream end? %b ] \n", getpid(), streamEnd()) ;
         return (size_t) num ;
     }
 

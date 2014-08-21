@@ -22,14 +22,14 @@ int main(int argc, char **argv)
     Rank myRank = (Rank)strtoul( argv[argc-1], NULL, 10 );
     Rank parRank = (Rank)strtoul( argv[argc-3], NULL, 10 );
 
-    fprintf( stdout, "Backend host:rank %s:%d connecting to parent host:port:rank %s:%d:%d\n",
-            myHostname, myRank, parHostname, parPort, parRank);
+    fprintf( stdout, "BE pid : [%d] host:rank %s:%d connecting to parent host:port:rank %s:%d:%d\n",
+            getpid(),myHostname, myRank, parHostname, parPort, parRank);
 
     Stream * stream = NULL;
     PacketPtr p;
     int rc, tag=0, num_iters=0;
     int send_val = 10 ;
-    int recv_val ;
+    int recv_val = 0;
     int wave = 0;
 
     char* sendAr = (char*)malloc(TOTAL_PACKET_SIZE);
@@ -40,37 +40,40 @@ int main(int argc, char **argv)
         //configure for piped input from emitter
         FILE* f = stdin;
         //wait until inidacated by FE
+#ifdef DEBUG_ON
+        printf("BE waiting to recv() pid: %d \n", getpid());
+#endif
         rc = net->recv(&tag, p, &stream);
         if( rc == -1 ) {
-            fprintf( stderr, "BE: Network::recv() failure\n" );
+            fprintf( stderr, "BE: Network::recv() failure in emmmitter recv_val : %d num_iters : %d\n", recv_val, num_iters );
             break;
         }
         else if( rc == 0 ) {
-            // a stream was closed
+//            a stream was closed
             continue;
         }
+
          
         switch(tag) {
 
         case PROT_CONCAT:
             p->unpack( "%d %d", &recv_val, &num_iters );
 
-            printf("Init BE pid : %d : values :", getpid());
+            printf("Init BE pid : %d : recieved token :%d\n", getpid(),recv_val);
                 // Send integer arrays as waves - simulate buffer waves
                 for (int i = 0; i < num_iters; i++) {
                     while (!feof(f)) {
                         size_t bytes_read = populateBuffer(sendAr, f);
+#ifdef DEBUG_ON
                         fprintf(stdout, "BE: Sending wave %d ..\n", wave++);
                         fprintf(stdout, "BE: Sending wave wait send Auc.. bytes read : %d \n", bytes_read);
-                        sleep(5);
 
                         for(int j = 0 ; j < bytes_read ; j++){
                             printf("%c",sendAr[j]);
                         }
                         printf("\n\n\n");
-
+#endif
                         if (stream->send(tag, "%ac", sendAr, bytes_read) == -1) {
-//                        if (stream->send(tag, "%ac", sendAr2, 3) == -1) {
                             fprintf(stderr, "BE: stream::send(%%d) failure in PROT_CONCAT\n");
                             tag = PROT_EXIT;
                             break;
@@ -79,13 +82,13 @@ int main(int argc, char **argv)
                             fprintf(stderr, "BE: stream::flush() failure in PROT_CONCAT\n");
                             break;
                         }
+#ifdef DEBUG_ON
                         fprintf(stdout, "BE: Sending wave Done..... \n");
                         fflush(stdout);
+#endif
                         sleep(2); // stagger sends
                     }
 
-                    fprintf(stdout, "BE: Sending last packet.. bytes read : \n");
-                    sleep(5);
                     //End of stream go to exit stage
                     //todo handle this properly - introduce new state ? ie:- PROT_EOF_STREAM
                     char* dummy = (char*) malloc(1);
@@ -95,8 +98,6 @@ int main(int argc, char **argv)
                             tag = PROT_EXIT;
                     }
                     break;
-
-
                 }
                 break;
 
@@ -108,10 +109,11 @@ int main(int argc, char **argv)
             if( stream->flush( ) == -1 ) {
                 fprintf( stderr, "BE: stream::flush() failure in PROT_EXIT\n" );
             }
+            fprintf(stdout, "BE: pid : %d Sending done.. \n", getpid());
             break;
 
         default:
-            fprintf( stderr, "BE: Unknown Protocol: %d\n", tag );
+            fprintf( stderr, "BE: pid : %d Unknown Protocol: %d\n", getpid(), tag );
             tag = PROT_EXIT;
             break;
         }

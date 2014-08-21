@@ -10,9 +10,9 @@ using namespace mrnstreaming;
 using namespace MRN;
 
 void MRNetProducer::loadBuffer(std::vector< PacketPtr > &packets_in, const TopologyLocalInfo &info) {
-//#ifdef DEBUG_ON
+#ifdef DEBUG_ON
     printf("[LOAD METHOD of Input Producer...pid : %d size : %d ] \n", getpid(), packets_in.size());
-//#endif
+#endif
     unsigned length;
     for (unsigned int i = 0; i < packets_in.size(); i++) {
         PacketPtr curr_packet = packets_in[i];
@@ -23,27 +23,15 @@ void MRNetProducer::loadBuffer(std::vector< PacketPtr > &packets_in, const Topol
         //handle special case - BE sync and case where node is down
         if (cur_inlet_rank != UNKNOWN_NODE && packets_in.size() != 1) {
             if (net->node_Failed(cur_inlet_rank)) {
+#ifdef DEBUG_ON
                 printf("[NODE FAILED ] \n");
+#endif
                 // drop packets from failed node
                 continue;
             }
         }
         char* val;
         curr_packet->unpack("%ac", &val, &length);
-
-        /*REMOVEEEEEE*/
-//        fprintf(stdout, "Procuder: RECV wave %d ..\n",wave++);
-//        fprintf(stdout, "Procuder: RECV wave wait send Auc.. bytes read : %d \n", length);
-//        for(int j = 0 ; j < length ; j++){
-//            printf("%c",val[j]);
-//        }
-//        printf("\n\n\n\n");
-//        return;
-        /*REMOVEEEEEE*/
-//        char* val2 ;
-//        curr_packet->unpack("%ac", &val2, &length);
-//        printf("LOAD METHOD unpack len :%d, val[0]: %c , val[1]: %c , val[2]: %c \n", length, val2[0], val2[1], val2[2]);
-//        sleep(3);
 
         //Start locking the queue
         synchronizer->set_mutex_lock(inQueueMutex);
@@ -75,8 +63,8 @@ void MRNetProducer::loadBuffer(std::vector< PacketPtr > &packets_in, const Topol
         synchronizer->set_mutex_unlock(inQueueMutex);
 
     }
-//#ifdef DEBUG_ON
+#ifdef DEBUG_ON
     printf("[LOAD METHOD Done !!...pid : %d  ] \n", getpid());
-//#endif
+#endif
 }
 

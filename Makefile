@@ -16,11 +16,12 @@ SIGHT_CFLAGS = -g -fPIC -I${ROOT_PATH} -I${ROOT_PATH}/attributes -I${ROOT_PATH}/
                 -I${ROOT_PATH}/tools/callpath/src -I${ROOT_PATH}/tools/adept-utils/include \
                 -I${ROOT_PATH}/tools/boost_1_55_0 \
                 -I${ROOT_PATH}/widgets/libmsr/include \
-		-I/home/usw/Install/MRnet/mrnet_4.1.0/include \
+                -I${ROOT_PATH}/mrnet \
+		-I/home/usw/Install/MRnet/mrnet_4.1.0/include  \
 		-I/home/usw/Install/MRnet/mrnet_4.1.0/xplat/include \
 		-I/home/usw/Install/MRnet/mrnet_4.1.0/build/x86_64-unknown-linux-gnu \
 		-I/home/usw/Install/MRnet/mrnet_4.1.0/external/boost/include \
-                -I${ROOT_PATH}/mrnet
+                -I${ROOT_PATH}/mrnet 
 
 SIGHT_LINKFLAGS = \
                   -Wl,-rpath ${ROOT_PATH} \
@@ -36,7 +37,12 @@ SIGHT_LINKFLAGS = \
 	          -lpthread -lpapi
 
 
-MRNET_CXXFLAGS = -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -fno-default-inline \
+MRNET_CXXFLAGS = -g -D__STDC_LIMIT_MACROS -D__STDC_CONSTANT_MACROS -D__STDC_FORMAT_MACROS -fno-default-inline \
+		-I/home/usw/Install/MRnet/mrnet_4.1.0/include \
+		-I/home/usw/Install/MRnet/mrnet_4.1.0/xplat/include \
+		-I/home/usw/Install/MRnet/mrnet_4.1.0/build/x86_64-unknown-linux-gnu \
+		-I/home/usw/Install/MRnet/mrnet_4.1.0/external/boost/include \
+                -I${ROOT_PATH}/mrnet \
                     -Dos_linux \
                     -Wall -Wno-system-headers -Wfloat-equal -Wconversion -Wshadow -Wpointer-arith \
                     -Wcast-qual -Wcast-align -Wwrite-strings -Wsign-compare -Wredundant-decls -Wlong-long
@@ -168,20 +174,20 @@ endif
 
 
 #rules for MRNet Integration
-sight_mrnet: sight_mrnet_fe sight_mrnet_so sight_mrnet_be
+sight_mrnet: sight_mrnet_fe sight_mrnet_be sight_mrnet_so
 	mv smrnet_fe mrnet/bin
 	mv smrnet_be mrnet/bin
 	mv libsmrnet_filter.so mrnet/bin
 	cp examples/4.AttributeAnnotationFiltering mrnet/bin
 
 sight_mrnet_fe: ${SIGHT_MRNET_FE} ${SIGHT_MRNET_H}
-	${CCC} ${SIGHT_CFLAGS} ${MRNET_CXXFLAGS} mrnet/mrnet_front.C -Wl,--whole-archive libsight_structure.so -Wl,-no-whole-archive  -DMFEM -I. ${SIGHT_LINKFLAGS} -o smrnet_fe${EXE} ${MRNET_LIBS}
+	${CCC} ${MRNET_CXXFLAGS} ${LDFLAGS} mrnet/mrnet_front.C  -o smrnet_fe${EXE} ${MRNET_LIBS}
 
 sight_mrnet_so: ${SIGHT_MRNET_SO} ${SIGHT_MRNET_H} process.C process.h libsight_structure.so
 	${CCC} ${SIGHT_CFLAGS} ${MRNET_CXXFLAGS} ${MRNET_SOFLAGS}  mrnet/mrnet_producer.C  mrnet/mrnet_tr_callback.C mrnet/mrnet_threads.C  -Wl,--whole-archive libsight_structure.so  -Wl,-no-whole-archive -DMFEM -I. ${SIGHT_LINKFLAGS} -o libsmrnet_filter.so
 
 sight_mrnet_be: ${SIGHT_MRNET_BE} ${SIGHT_MRNET_H}
-	${CCC} ${SIGHT_CFLAGS} ${MRNET_CXXFLAGS} mrnet/mrnet_emmitter.C -Wl,--whole-archive -Wl,-no-whole-archive  -DMFEM -o smrnet_be${EXE} ${MRNET_LIBS}
+	${CCC} ${MRNET_CXXFLAGS} ${LDFLAGS} mrnet/mrnet_emmitter.C -o smrnet_be${EXE} ${MRNET_LIBS}
 
 sight_mrnet_clean: 
 	rm -rf mrnet/bin/smrnet_*

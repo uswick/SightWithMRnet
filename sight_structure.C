@@ -2086,14 +2086,14 @@ string dbgStream::addImage(string ext)
 //void dbgStream::enter(std::string name, const std::map<std::string, std::string>& properties, bool inheritedFrom) {
 void dbgStream::enter(sightObj* obj) {
   ownerAccessing();
-  printf("#DBG-OUT dbgstream << operator method enter [sightobj] [string] char_str : %s  \n", enterStr(*(obj->props)).c_str());
+//  printf("#DBG-OUT dbgstream << operator method enter [sightobj] [string] char_str : %s  \n", enterStr(*(obj->props)).c_str());
   *this << enterStr(*(obj->props));
   userAccessing();
 }
 
 void dbgStream::enter(const properties& props) {
   ownerAccessing();
-  printf("#DBG-OUT dbgstream << operator method enter [props] [string] char_str : %s  \n", enterStr(props).c_str());
+//  printf("#DBG-OUT dbgstream << operator method enter [props] [string] char_str : %s  \n", enterStr(props).c_str());
   *this << enterStr(props);
   userAccessing();
 }
@@ -2127,7 +2127,7 @@ void dbgStream::exit(sightObj* obj) {
   ownerAccessing();
 /*cout << "props="<<obj->props->str()<<endl;
 cout << exitStr(*(obj->props)) << endl;*/
-  printf("#DBG-OUT dbgstream << operator method exit [sightobj] [string] char_str : %s  \n", exitStr(*(obj->props)).c_str());
+//  printf("#DBG-OUT dbgstream << operator method exit [sightobj] [string] char_str : %s  \n", exitStr(*(obj->props)).c_str());
   *this << exitStr(*(obj->props));
   userAccessing();
 }
@@ -2135,7 +2135,7 @@ cout << exitStr(*(obj->props)) << endl;*/
 void dbgStream::exit(const properties& props) {
   ownerAccessing();
 
-  printf("#DBG-OUT dbgstream << operator method exit [props] [string] char_str : %s  \n", exitStr(props).c_str());
+//  printf("#DBG-OUT dbgstream << operator method exit [props] [string] char_str : %s  \n", exitStr(props).c_str());
   *this << exitStr(props);
   userAccessing();
 }
@@ -2180,6 +2180,12 @@ std::string dbgStream::tagStr(const properties& props) {
                 return;
             // Emit the exit tag for this dbgStream
             this->exit(getSightObject());
+            //send final terminating packet
+            char* dummy = (char*)malloc(1);
+            *dummy = ' ';
+            this->transferData(dummy, 1, true);
+            //todo free dummy char str
+
             setEmitExitTag(false);
  }
 
@@ -2200,7 +2206,7 @@ operator <<(MRNetostream &out, const char *s) {
                 length++;
             };
             //todo currently we push all data out
-            printf("#OUT MRNetostream << operator method [char] char_str : %s pid : %d  \n", s, getpid());
+//            printf("#OUT MRNetostream << operator method [char] char_str : %s pid : %d  \n", s, getpid());
             out.transferData(s, length, false);
             return out;
 }
@@ -2209,7 +2215,7 @@ operator <<(MRNetostream &out, const char *s) {
 template <>
 inline MRNetostream &
 operator<<(MRNetostream & out, const std::string& value){
-            printf("<<<<<<<<<< OUT MRNetostream << operator method [string] size : %d pid: %d --- char_str : %s \n", (int) value.size(), getpid(), value.c_str());
+//            printf("<<<<<<<<<< OUT MRNetostream << operator method [string] size : %d pid: %d --- char_str : %s \n", (int) value.size(), getpid(), value.c_str());
             out.transferData(value.c_str(), (int) value.size(), false);
             return out ;
  }
@@ -2223,80 +2229,80 @@ operator <<(MRNetostream &out, std::ostream &(*func)(std::ostream &)) {
 
 void MRNetostream::enter(sightObj* obj) {
             ownerAccessing();
-            printf("#MRNET-OUT MRNetostream << operator method enter [sightobj] [string] char_str : %s  \n", enterStr(*(obj->props)).c_str());
+//            printf("#MRNET-OUT MRNetostream << operator method enter [sightobj] [string] char_str : %s  \n", enterStr(*(obj->props)).c_str());
             *this << enterStr(*(obj->props));
             userAccessing();
 }
 
 void MRNetostream::enter(const properties& props) {
             ownerAccessing();
-            printf("#MRNET-OUT MRNetostream << operator method enter [props][string] char_str : %s  \n", enterStr(props).c_str());
+//            printf("#MRNET-OUT MRNetostream << operator method enter [props][string] char_str : %s  \n", enterStr(props).c_str());
             *this << enterStr(props);
             userAccessing();
 }
 
 void MRNetostream::exit(sightObj* obj) {
             ownerAccessing();
-            printf("#MRNET-OUT MRNetostream << operator method exit [sightobj] [string] char_str : %s  \n", exitStr(*(obj->props)).c_str());
+//            printf("#MRNET-OUT MRNetostream << operator method exit [sightobj] [string] char_str : %s  \n", exitStr(*(obj->props)).c_str());
             *this << exitStr(*(obj->props));
             userAccessing();
 }
 
 void MRNetostream::exit(const properties& props) {
             ownerAccessing();
-            printf("#MRNET-OUT MRNetostream << operator method exit [props] [string] char_str : %s  \n", exitStr(props).c_str());
+//            printf("#MRNET-OUT MRNetostream << operator method exit [props] [string] char_str : %s  \n", exitStr(props).c_str());
             *this << exitStr(props);
             userAccessing();
 }
 
 bool MRNetostream::transferData(const char* buf, int length, bool set_final = false){
     if(length > 0){
-        /****REMOVE******/
+#ifdef DEBUG_ON
         fprintf(stdout, "\n\n\n\n\n<<<<<<<< WRITE TO QUEUE : Transfer..pid : %d bytes read : %d \n", getpid()
         ,length);
         for(int j = 0 ; j < length ; j++){
             printf("%c",buf[j]);
         }
         printf("\n\n\n\n\n");
-        /****REMOVE******/
+#endif
         writeQueue(buf, length);
-        fprintf(stdout, "<<<<<<<< WRITE TO QUEUE Done : Transfer..pid : %d bytes read : %d \n", getpid()
+#ifdef DEBUG_ON
+        fprintf(stdout, "<<<<<<<< WRITE TO TRANSFER QUEUE Done : Transfer..pid : %d bytes read : %d \n", getpid()
                 ,length);
+#endif
         int len = 0;
         while((len=readQueue()) > 0){
-            fprintf(stdout, "<<<<<<<< Transfer DATA #1 : Transfer..pid : %d bytes read : %d  buf[0] : %c  bud[n] : %c \n", getpid(), len
-            , buf[0], buf[len]);
             Packet *pckt;
-            sleep(8);
-            printf("going to CRASH!!!.. \n");
             pckt = new Packet(strm_id, tag_id, "%ac", buffer, len);
-            /*REMOVEE*/
+#ifdef DEBUG_ON
             fprintf(stdout, "OUT-Structure: Transfer wave %d ..\n",wave++);
             fprintf(stdout, "OUT-Structure: Transfer wave wait send Auc.. bytes read : %d \n", len);
-            sleep(5);
+//            sleep(12);
             for(int j = 0 ; j < len ; j++){
                 printf("%c",buffer[j]);
             }
             printf("\n\n\n\n\n");
-            /*REMOVE*/
+#endif
             PacketPtr new_packet (pckt);
             if (net->is_LocalNodeFrontEnd()) {
 //            FE Processing
+#ifdef DEBUG_ON
                 printf("#MRNet Merger method FE net : %p pid : %d  \n", net, getpid());
+#endif
                 strm->add_IncomingPacket(new_packet);
                 strm->flush();
             } else {
 //            INternal or BE node processing
+#ifdef DEBUG_ON
                 printf("#MRNet Merger method Internal/BE net : %p  pid : %d \n", net, getpid());
+#endif
                 net->send_PacketToParent(new_packet);
                 net->flush();
             }
         }
         //handle end of stream
         setEofStream(set_final);
-        fprintf(stdout, "<<<<<<<< Transfer DATA #2 : Transfer..pid : %d bytes read : %d \n", getpid(), len);
         len = readQueue();
-        fprintf(stdout, "<<<<<<<< Transfer DATA #3 : Transfer..pid : %d bytes read : %d \n", getpid(), len);
         if(eofStream()){
             Packet *pckt;
             if(len > 0){
@@ -2308,18 +2314,24 @@ bool MRNetostream::transferData(const char* buf, int length, bool set_final = fa
             PacketPtr final_packet (pckt);
             if (net->is_LocalNodeFrontEnd()) {
 //            FE Processing
+#ifdef DEBUG_ON
                 printf("#MRNet Merger final_packet method FE net : %p pid : %d  \n", net, getpid());
+#endif
                 strm->add_IncomingPacket(final_packet);
                 strm->flush();
             } else {
 //            INternal or BE node processing
+#ifdef DEBUG_ON
                 printf("#MRNet Merger final_packet method Internal/BE net : %p  pid : %d \n", net, getpid());
+#endif
                 net->send_PacketToParent(final_packet);
                 net->flush();
             }
         }
+#ifdef DEBUG_ON
         fprintf(stdout, "<<<<<<<< Exit Transfer TO QUEUE : Transfer..pid : %d bytes read : %d \n", getpid()
                 ,length);
+#endif
         return true;
     }
     return false;
@@ -2332,7 +2344,9 @@ bool MRNetostream::transferData(const char* buf, int length, bool set_final = fa
            Read from queue into buffer
         */
  size_t MRNetostream::readQueue(){
+#ifdef DEBUG_ON
             printf("READ QUEUE start!!!..buf size : %d \n", buffer_queue.size());
+#endif
             //if queue exceeds/equal to the TOTAL_PACKET_SIZE size then copy first TOTAL_PACKET_SIZE elements
             // return TOTAL_PACKET_SIZE
             if(buffer_queue.size() >= TOTAL_PACKET_SIZE){
@@ -2341,7 +2355,9 @@ bool MRNetostream::transferData(const char* buf, int length, bool set_final = fa
                     buffer[j] = *it;
                     it = buffer_queue.erase(it);
                 }
+#ifdef DEBUG_ON
                 printf("READ QUEUE > TOTAL_PACKT!!!..buf size : %d \n", buffer_queue.size());
+#endif
                 return TOTAL_PACKET_SIZE;
             } else if(eofStream()){
                 //if not exceeds but is the last packet then return what ever in the queue -
@@ -2349,10 +2365,14 @@ bool MRNetostream::transferData(const char* buf, int length, bool set_final = fa
                 std::copy(buffer_queue.begin(), buffer_queue.end(), buffer);
                 int buf_size = buffer_queue.size();
                 buffer_queue.clear();
+#ifdef DEBUG_ON
                 printf("READ QUEUE < TOTAL && EOS!!!..ret size : %d buffer_size \n", buf_size, buffer_queue.size());
+#endif
                 return buf_size;
             } else {
+#ifdef DEBUG_ON
                 printf("READ QUEUE < TOTAL!!!..ret size : %u \n", (size_t) 0);
+#endif
                 //if not exceeds do nothing - return 0
                 return (size_t) 0 ;
             }

@@ -65,9 +65,9 @@ void *MRNetThread::consumerFuncHelper(void *arg) {
 }
 
 void MRNetThread::consumerFunc() {
-//#ifdef DEBUG_ON
+#ifdef DEBUG_ON
     fprintf(stdout, "[MRNetThread Merge thread Started.. PID : %d number of iterators : %d ]\n", getpid(), iterators.size());
-//#endif
+#endif
     //do merging in this seperate thread
     const char* outDir = "test_out/tmp";
     mergeType mt = str2MergeType(string("zipper"));
@@ -124,12 +124,12 @@ void MRNetThread::consumerFunc() {
 #endif
             "");
 
-    fprintf(stdout, "[MRNetThread Merge NEAR ENDD !!.. PID : %d number of iterators : %d ]\n", getpid(), iterators.size());
     // Close all the parsers and their files
 //    for(vector<MRNetParser*>::iterator p=iterators.begin(); p!=iterators.end(); p++)
 //        delete *p;
-
-    fprintf(stdout, "[MRNetThread Merge thread ENDD !!.. PID : %d number of iterators ]\n", getpid());
+#ifdef DEBUG_ON
+    fprintf(stdout, "[MRNetThread Merge thread END !!.. PID : %d number of iterators ]\n", getpid());
+#endif
 
 }
 
