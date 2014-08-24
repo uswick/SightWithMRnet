@@ -161,8 +161,8 @@ int main(int argc, char **argv)
 
         // Wait for backends to attach
         unsigned int waitfor_count = num_backends;
-        fprintf( stdout, "Please start backends now.\n\nWaiting for %u backends to connect\n",
-                waitfor_count );
+        fprintf( stdout, "FE PID : %d Please start backends now.\n\nWaiting for %u backends to connect\n",
+                getpid(), waitfor_count );
         fflush(stdout);
         unsigned curr_count = 0;
         do {

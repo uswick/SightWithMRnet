@@ -20,6 +20,7 @@
 #include "mrnet/AtomicSyncPrimitives.h"
 using namespace MRN;
 using namespace atomiccontrols;
+using namespace std;
 
 namespace sight {
 namespace structure{
@@ -1097,11 +1098,14 @@ class BlockStreamRecord: public streamRecord {
 class dbgBuf: public std::streambuf
 {
   friend class dbgStream;
+
+  std::streambuf* baseBuf;
+
+protected:
   // True immediately after a new line
   bool synched;
   // True if the owner dbgStream is writing text and false if the user is
   bool ownerAccess;
-  std::streambuf* baseBuf;
 
   // The number of observed '<' characters that have not yet been balanced out by '>' characters.
   //      numOpenAngles = 1 means that we're inside an HTML tag
@@ -1119,8 +1123,8 @@ class dbgBuf: public std::streambuf
   dbgBuf();
   dbgBuf(std::streambuf* baseBuf);
   void init(std::streambuf* baseBuf);
-  
-private:
+
+protected:
   // This dbgBuf has no buffer. So every character "overflows"
   // and can be put directly into the teed buffers.
   virtual int overflow(int c);
@@ -1155,6 +1159,57 @@ protected:
 }; // class dbgBuf
 
 
+/* =============================
+* mrnet based Stream buffer
+* ==============================
+* */
+    class mrnBuf : public dbgBuf {
+
+    private:
+        char *buffer;
+        int BUFF_SIZE;
+        MRN::Stream *strm;
+        int strm_id;
+        int tag_id;
+        MRN::Network *net;
+        bool final_packet;
+        int wave;
+
+        virtual std::streamsize xsputn(const char *s, std::streamsize n) ;
+
+        virtual int overflow(int c) ;
+
+        virtual int sync() ;
+
+        virtual std::streamsize sputn_mrn(const char *s, std::streamsize n) ;
+
+    public:
+        mrnBuf(MRN::Stream *strm, MRN::Network *net, int strm_id, int tag_id) {
+            BUFF_SIZE = TOTAL_PACKET_SIZE - 1 ;
+            //BUFF_SIZE + 1  ==> last pos in buffer is NOT used
+            buffer = new char[BUFF_SIZE + 1];
+            setp(buffer, buffer + BUFF_SIZE);
+            this->strm = strm;
+            this->net = net;
+            this->strm_id = strm_id;
+            this->tag_id = tag_id;
+            final_packet = false;
+            wave = 0 ;
+        }
+
+        void setEofStream(bool flag) {
+            final_packet = flag;
+            sync();
+        }
+
+        bool eofStream() {
+            return final_packet;
+        }
+
+
+    };
+
+
 // Stream that uses dbgBuf
 class dbgStream : public common::dbgStream, public sightObj
 {
@@ -1183,6 +1238,7 @@ public:
   // ostreams.
   dbgStream();
   dbgStream(properties* props, std::string title, std::string workDir, std::string imgDir, std::string tmpDir);
+  dbgStream(mrnBuf* mrnBuff, properties *props, string title, string workDir, string imgDir, std::string tmpDir) ;
   dbgStream(properties* props, std::string title, std::string workDir, std::string imgDir, std::string tmpDir, bool no_init);
   void init(properties* props, std::string title, std::string workDir, std::string imgDir, std::string tmpDir);
   ~dbgStream();
@@ -1269,7 +1325,8 @@ public:
   }
 }; // dbgStream
 
-/**
+
+/**  ===============================
 * DBG Stream for MRNet wire transfer
 */
 class MRNetostream : public dbgStream {
@@ -1279,7 +1336,6 @@ class MRNetostream : public dbgStream {
         int tag_id;
         MRN::Network *net;
         std::vector<char> buffer_queue ;
-        bool final_packet;
         char* buffer ;
         bool init;
         int wave ;
@@ -1293,49 +1349,18 @@ class MRNetostream : public dbgStream {
             this->strm_id = strm_id;
             this->tag_id = tag_id;
             buffer = (char*)malloc(TOTAL_PACKET_SIZE);
-            setEofStream(false);
             wave = 0 ;
             dbgStream::init(props, title, workDir, imgDir, tmpDir);
             init = true;
         }
 
+        MRNetostream(mrnBuf* mrnBuff, properties* props, std::string title, std::string workDir, std::string imgDir, std::string tmpDir)
+        : dbgStream(mrnBuff, props, title, workDir, imgDir, tmpDir) {
+            init = true;
+        }
+
         ~MRNetostream();
 
-        void setEofStream(bool flag){
-            final_packet = flag;
-        }
-
-        bool eofStream(){
-            return final_packet;
-        }
-
-        bool transferData(const char* buf, int length, bool set_final);
-
-        size_t readQueue();
-
-        void writeQueue(const char *data_ar, int length) {
-            //insert to queue
-            for (int i = 0; i < length; i++) {
-                buffer_queue.push_back(data_ar[i]);
-            }
-        }
-
-    // Template based operator
-        template <typename T>
-        friend MRNetostream &operator <<(MRNetostream &, const T &);
-
-        // Additional overload to handle ostream specific io manipulators
-        friend MRNetostream &operator <<(MRNetostream &, std::ostream &(*)(std::ostream &));
-
-        void enter(sightObj* obj);
-
-        void enter(const properties& props);
-
-        void exit(sightObj* obj);
-
-        void exit(const properties& props);
-
-        // Accessor function to get a reference to the ostream
         std::ostream &get_ostream() {
             return *this;
         }
